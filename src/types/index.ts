@@ -27,3 +27,38 @@ export type {
   SpotifyAuthEventName,
   SpotifyConfig,
 } from './spotify';
+
+export type {
+  // YouTube core
+  YouTubeItem,
+  YouTubePlaybackMode,
+  AudioStream,
+  // YouTube Data API
+  YouTubeThumbnail,
+  YouTubeThumbnails,
+  YouTubeVideoSnippet,
+  YouTubeVideoContentDetails,
+  YouTubeVideoResource,
+  YouTubeSearchResult,
+  YouTubePlaylistItem,
+  YouTubePlaylistResource,
+  YouTubeListResponse,
+  YouTubePageInfo,
+  // YouTube IFrame Player
+  YTPlayerOptions,
+  YTPlayerInstance,
+  YouTubePlayerEvents,
+  YouTubePlayerEventName,
+  // YouTube Music
+  YouTubeMusicAlbum,
+  YouTubeMusicArtist,
+  YouTubeMusicPlaylist,
+  // YouTube Auth
+  YouTubeTokenResponse,
+  YouTubePersistedTokenData,
+  YouTubeAuthEvents,
+  YouTubeAuthEventName,
+  YouTubeConfig,
+} from './youtube';
+
+export { YTPlayerState } from './youtube';
