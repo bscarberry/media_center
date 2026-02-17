@@ -62,3 +62,30 @@ export type {
 } from './youtube';
 
 export { YTPlayerState } from './youtube';
+
+export type {
+  // Jellyfin core
+  JellyfinItem,
+  JellyfinAuthResult,
+  JellyfinUser,
+  JellyfinImageTags,
+  JellyfinMediaStream,
+  JellyfinMediaSource,
+  JellyfinBaseItem,
+  JellyfinUserData,
+  JellyfinItemType,
+  JellyfinQueryResult,
+  // Streaming / transcoding
+  TranscodeQuality,
+  TranscodeOptions,
+  // Player events
+  JellyfinPlayerEvents,
+  JellyfinPlayerEventName,
+  // Download / cache
+  CachedTrack,
+  CacheStats,
+  // Configuration
+  JellyfinConfig,
+} from './jellyfin';
+
+export { QUALITY_PRESETS } from './jellyfin';
