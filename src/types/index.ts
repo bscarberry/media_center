@@ -89,3 +89,20 @@ export type {
 } from './jellyfin';
 
 export { QUALITY_PRESETS } from './jellyfin';
+
+export {
+  MediaSourceType,
+  EMPTY_PLAYBACK_STATE,
+  DEFAULT_ROUTER_CONFIG,
+} from './media';
+
+export type {
+  MediaTrack,
+  PlaybackState,
+  MediaPlayerEvents,
+  MediaPlayerEventName,
+  MediaRouterEvents,
+  MediaRouterEventName,
+  RepeatMode,
+  MediaRouterConfig,
+} from './media';
