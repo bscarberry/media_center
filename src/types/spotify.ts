@@ -142,3 +142,49 @@ export type SpotifyPlayerEventName = keyof SpotifyPlayerEvents;
 // ---------------------------------------------------------------------------
 
 export type SpotifySearchType = 'track' | 'album' | 'artist';
+
+// ---------------------------------------------------------------------------
+// OAuth2 / PKCE types
+// ---------------------------------------------------------------------------
+
+/** Tokens as returned by the Spotify /api/token endpoint. */
+export interface SpotifyTokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  refresh_token: string;
+  scope: string;
+}
+
+/** Shape persisted by TokenManager in electron-store. */
+export interface PersistedTokenData {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number; // epoch ms
+  scope: string;
+}
+
+/** Events emitted by TokenManager. */
+export interface TokenManagerEvents {
+  token_refreshed: { accessToken: string; expiresAt: number };
+  token_refresh_failed: { error: string };
+  tokens_cleared: void;
+}
+
+export type TokenManagerEventName = keyof TokenManagerEvents;
+
+/** Events emitted by SpotifyAuth. */
+export interface SpotifyAuthEvents {
+  auth_started: void;
+  auth_success: { accessToken: string };
+  auth_error: { error: string };
+  auth_denied: { error: string };
+}
+
+export type SpotifyAuthEventName = keyof SpotifyAuthEvents;
+
+/** Application-level Spotify configuration. */
+export interface SpotifyConfig {
+  clientId: string;
+  redirectUri: string;
+}
