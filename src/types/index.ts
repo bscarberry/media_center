@@ -106,3 +106,22 @@ export type {
   RepeatMode,
   MediaRouterConfig,
 } from './media';
+
+export {
+  DEFAULT_SEARCH_FILTERS,
+  EMPTY_SEARCH_RESULTS,
+} from './library';
+
+export type {
+  ContentType,
+  MediaAlbum,
+  MediaArtist,
+  MediaPlaylist,
+  SearchFilters,
+  SearchResults,
+  LibrarySection,
+  SourceToggleState,
+  PaginatedResult,
+  RecentlyPlayedEntry,
+  RecommendationGroup,
+} from './library';
