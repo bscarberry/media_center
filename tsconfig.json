@@ -1,22 +1,34 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "commonjs",
+    "module": "ESNext",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "outDir": "./dist",
-    "rootDir": "./src",
+    "outDir": "./dist/renderer",
+    "rootDir": "./src/renderer",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
     "sourceMap": true,
     "jsx": "react-jsx",
-    "moduleResolution": "node",
-    "typeRoots": ["./node_modules/@types", "./src/types"]
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "typeRoots": ["./node_modules/@types", "./src/renderer/types"],
+    "baseUrl": ".",
+    "paths": {
+      "@components/*": ["src/renderer/components/*"],
+      "@services/*": ["src/renderer/services/*"],
+      "@stores/*": ["src/renderer/stores/*"],
+      "@hooks/*": ["src/renderer/hooks/*"],
+      "@types/*": ["src/renderer/types/*"],
+      "@utils/*": ["src/renderer/utils/*"],
+      "@config/*": ["src/renderer/config/*"],
+      "@renderer/*": ["src/renderer/*"]
+    }
   },
-  "include": ["src/**/*"],
+  "include": ["src/renderer/**/*"],
   "exclude": ["node_modules", "dist"]
 }

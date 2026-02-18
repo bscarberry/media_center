@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   Global styles – Brandon's Media Hub
+   ============================================================================ */
+
+@layer base {
+  /* Remove default margins */
+  *,
+  *::before,
+  *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+      Helvetica, Arial, sans-serif;
+  }
+
+  body {
+    background-color: #0a0a0a;
+    color: #ffffff;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Prevent text selection during drag operations */
+    user-select: none;
+  }
+
+  /* Allow text selection in content areas */
+  .select-text {
+    user-select: text;
+  }
+
+  /* Custom scrollbar (dark theme) */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #3a3a3a;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #4a4a4a;
+  }
+
+  /* Hide scrollbar until hover */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-on-hover::-webkit-scrollbar-thumb {
+    background: transparent;
+  }
+
+  .scrollbar-on-hover:hover::-webkit-scrollbar-thumb {
+    background: #3a3a3a;
+  }
+}
+
+@layer components {
+  /* Drag region for macOS title bar */
+  .drag-region {
+    -webkit-app-region: drag;
+  }
+
+  .no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  /* Truncate text with ellipsis */
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  /* Loading skeleton animation */
+  .skeleton {
+    @apply bg-surface animate-pulse rounded;
+  }
+}
+
+@layer utilities {
+  /* Glass effect for overlays */
+  .glass {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+}
+
+/* ============================================================================
+   Keyframe animations
+   ============================================================================ */
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  50% { opacity: 0.5; }
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* react-grid-layout overrides */
+.react-grid-layout {
+  position: relative;
+}
+
+.react-grid-item {
+  transition: all 200ms ease;
+  transition-property: left, top, width, height;
+}
+
+.react-grid-item.react-grid-placeholder {
+  background: #1db954 !important;
+  opacity: 0.15 !important;
+  border-radius: 12px;
+}
+
+.react-resizable-handle {
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.react-grid-item:hover .react-resizable-handle {
+  opacity: 0.5;
+}
