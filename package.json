@@ -18,8 +18,10 @@
     "open": "^9.1.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-grid-layout": "^2.2.2",
     "react-router-dom": "^7.13.0",
     "react-window": "^2.2.7",
+    "recharts": "^3.7.0",
     "youtube-dl-exec": "^3.0.10",
     "zustand": "^5.0.11"
   },

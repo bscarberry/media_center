@@ -125,3 +125,35 @@ export type {
   RecentlyPlayedEntry,
   RecommendationGroup,
 } from './library';
+
+export {
+  NEWS_CATEGORIES,
+  DEFAULT_WEATHER_SETTINGS,
+  DEFAULT_NEWS_SETTINGS,
+  DEFAULT_DASHBOARD_LAYOUT,
+  DEFAULT_DASHBOARD_STATE,
+} from './dashboard';
+
+export type {
+  // Weather
+  TemperatureUnit,
+  WeatherCondition,
+  WeatherCurrent,
+  WeatherHourly,
+  WeatherDaily,
+  AlertSeverity,
+  WeatherAlert,
+  WeatherData,
+  WeatherLocation,
+  WeatherSettings,
+  // News
+  NewsCategory,
+  NewsArticle,
+  NewsSettings,
+  // Widget framework
+  WidgetId,
+  WidgetConfig,
+  WidgetLayoutItem,
+  DashboardLayout,
+  DashboardState,
+} from './dashboard';
