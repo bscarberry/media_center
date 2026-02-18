@@ -38,6 +38,8 @@ cd media_center
 npm install
 ```
 
+> **Windows note:** The `.npmrc` file in the repo root automatically sets `YOUTUBE_DL_SKIP_PYTHON_CHECK=1` so that `youtube-dl-exec` installs without requiring Python. Python (and [yt-dlp](https://github.com/yt-dlp/yt-dlp)) are only needed at runtime if you use the YouTube `extract` playback mode.
+
 ### 3. Create your environment file
 
 Copy the example environment file and fill in your API keys:
@@ -322,6 +324,34 @@ media_center/
 | Dates | date-fns 4 |
 | Persistence | electron-store |
 | Packaging | electron-builder |
+
+## Troubleshooting
+
+### `npm install` fails with "youtube-dl-exec needs Python"
+
+The `youtube-dl-exec` package runs a Python check during installation. The `.npmrc` file in this repo skips that check automatically. If you still see this error, set the environment variable manually before installing:
+
+```bash
+# Windows (PowerShell)
+$env:YOUTUBE_DL_SKIP_PYTHON_CHECK=1; npm install
+
+# Windows (Command Prompt)
+set YOUTUBE_DL_SKIP_PYTHON_CHECK=1 && npm install
+
+# macOS / Linux
+YOUTUBE_DL_SKIP_PYTHON_CHECK=1 npm install
+```
+
+Python is **not required** unless you use the YouTube `extract` playback mode (set `YOUTUBE_PLAYBACK_MODE=extract` in `.env`). The default `iframe` mode works without Python.
+
+### EPERM errors on Windows during `npm install`
+
+Windows may show `EPERM` cleanup warnings during installation. These are typically harmless -- the packages still install correctly. If installation fails entirely, try running your terminal as Administrator or deleting `node_modules` and retrying:
+
+```bash
+rd /s /q node_modules
+npm install
+```
 
 ## License
 
