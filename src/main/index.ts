@@ -22,6 +22,11 @@ import Store from 'electron-store';
 const IS_DEV = process.env.NODE_ENV !== 'production';
 const DEV_SERVER_URL = 'http://localhost:5173';
 
+// Disable GPU hardware acceleration on ARM to prevent blank screens
+if (process.arch === 'arm64' || process.arch === 'arm') {
+  app.disableHardwareAcceleration();
+}
+
 // Persist window bounds between sessions
 const store = new Store<{
   windowBounds?: Rectangle;
