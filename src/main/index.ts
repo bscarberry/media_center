@@ -19,7 +19,7 @@ import Store from 'electron-store';
 // Constants
 // ---------------------------------------------------------------------------
 
-const IS_DEV = process.env.NODE_ENV !== 'production';
+const IS_DEV = !app.isPackaged;
 const DEV_SERVER_URL = 'http://localhost:5173';
 
 // Disable GPU hardware acceleration on ARM to prevent blank screens
