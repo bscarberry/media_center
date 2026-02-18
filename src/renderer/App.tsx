@@ -18,6 +18,8 @@ import {
   useLocation,
 } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { HomePage } from './components/home/HomePage';
+import { useSourceStatus } from './hooks/useSourceStatus';
 
 // ---------------------------------------------------------------------------
 // Providers & Stores
@@ -139,23 +141,8 @@ function PageSkeleton() {
 }
 
 // ---------------------------------------------------------------------------
-// Placeholder pages (to be wired to existing components)
+// Placeholder pages
 // ---------------------------------------------------------------------------
-
-function HomePage() {
-  return (
-    <div style={pageStyle}>
-      <h1 style={pageTitle}>Home</h1>
-      <p style={pageSubtitle}>Welcome to Media Hub. Your music, videos, and more — all in one place.</p>
-      <div style={placeholderGrid}>
-        <PlaceholderCard title="Recently Played" icon="🎵" />
-        <PlaceholderCard title="Your Library" icon="📚" />
-        <PlaceholderCard title="Discover" icon="🔍" />
-        <PlaceholderCard title="Dashboard" icon="📊" />
-      </div>
-    </div>
-  );
-}
 
 function SearchPage() {
   return (
@@ -184,6 +171,74 @@ function LibraryPage() {
   );
 }
 
+function SpotifyPage() {
+  return (
+    <div style={pageStyle}>
+      <h1 style={pageTitle}>
+        <span style={{ color: '#1db954' }}>{'\uD83C\uDFB5'}</span> Spotify
+      </h1>
+      <p style={pageSubtitle}>Browse and play music from Spotify.</p>
+      <div style={servicePrompt}>
+        <span style={{ fontSize: 48 }}>{'\uD83C\uDFB5'}</span>
+        <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>Connect to Spotify</h3>
+        <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>Sign in to browse playlists, albums, and play music.</p>
+        <button style={{ ...connectBtn, backgroundColor: '#1db954' }}>Connect Spotify</button>
+      </div>
+    </div>
+  );
+}
+
+function YouTubePage() {
+  return (
+    <div style={pageStyle}>
+      <h1 style={pageTitle}>
+        <span style={{ color: '#ff0000' }}>{'\u25B6\uFE0F'}</span> YouTube
+      </h1>
+      <p style={pageSubtitle}>Watch videos and listen to music from YouTube.</p>
+      <div style={servicePrompt}>
+        <span style={{ fontSize: 48 }}>{'\u25B6\uFE0F'}</span>
+        <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>Connect to YouTube</h3>
+        <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>Sign in to access playlists and play videos.</p>
+        <button style={{ ...connectBtn, backgroundColor: '#ff0000' }}>Connect YouTube</button>
+      </div>
+    </div>
+  );
+}
+
+function WeatherPage() {
+  return (
+    <div style={pageStyle}>
+      <h1 style={pageTitle}>
+        {'\u2601\uFE0F'} Weather
+      </h1>
+      <p style={pageSubtitle}>Current conditions, hourly forecast, and 7-day outlook.</p>
+      <div style={servicePrompt}>
+        <span style={{ fontSize: 48 }}>{'\u2601\uFE0F'}</span>
+        <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>Weather Dashboard</h3>
+        <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>Add your OpenWeatherMap API key in Settings to get started.</p>
+        <button style={{ ...connectBtn, backgroundColor: '#4fc3f7' }}>Go to Settings</button>
+      </div>
+    </div>
+  );
+}
+
+function NewsPage() {
+  return (
+    <div style={pageStyle}>
+      <h1 style={pageTitle}>
+        {'\uD83D\uDCF0'} News
+      </h1>
+      <p style={pageSubtitle}>Top headlines, trending stories, and personalized news feed.</p>
+      <div style={servicePrompt}>
+        <span style={{ fontSize: 48 }}>{'\uD83D\uDCF0'}</span>
+        <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>News Feed</h3>
+        <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>Add your NewsAPI key in Settings to get started.</p>
+        <button style={{ ...connectBtn, backgroundColor: '#ff9800' }}>Go to Settings</button>
+      </div>
+    </div>
+  );
+}
+
 function SettingsPage() {
   return (
     <div style={pageStyle}>
@@ -194,9 +249,13 @@ function SettingsPage() {
           <SettingsRow label="YouTube" value="Not connected" action="Connect" />
           <SettingsRow label="Jellyfin" value="Not connected" action="Connect" />
         </SettingsSection>
+        <SettingsSection title="Dashboard Widgets">
+          <SettingsRow label="Weather API Key" value="Not configured" action="Configure" />
+          <SettingsRow label="News API Key" value="Not configured" action="Configure" />
+        </SettingsSection>
         <SettingsSection title="Appearance">
           <SettingsRow label="Theme" value="Dark" />
-          <SettingsRow label="Temperature Unit" value="°F" />
+          <SettingsRow label="Temperature Unit" value="\u00B0F" />
         </SettingsSection>
         <SettingsSection title="About">
           <SettingsRow label="Version" value="1.0.0" />
@@ -234,28 +293,52 @@ function SettingsRow({ label, value, action }: { label: string; value: string; a
   );
 }
 
-function PlaceholderCard({ title, icon }: { title: string; icon: string }) {
-  return (
-    <div style={cardStyle}>
-      <span style={{ fontSize: 32, marginBottom: 8 }}>{icon}</span>
-      <span style={{ fontSize: 13, fontWeight: 500, color: '#b3b3b3' }}>{title}</span>
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Sidebar Navigation
 // ---------------------------------------------------------------------------
 
-const NAV_ITEMS = [
+const NAV_MAIN = [
   { path: '/home', label: 'Home', icon: '\u{1F3E0}' },
   { path: '/search', label: 'Search', icon: '\u{1F50D}' },
   { path: '/library', label: 'Library', icon: '\u{1F4DA}' },
+] as const;
+
+const NAV_MEDIA = [
+  { path: '/spotify', label: 'Spotify', icon: '\uD83C\uDFB5', color: '#1db954' },
+  { path: '/youtube', label: 'YouTube', icon: '\u25B6\uFE0F', color: '#ff0000' },
+] as const;
+
+const NAV_WIDGETS = [
+  { path: '/weather', label: 'Weather', icon: '\u2601\uFE0F' },
+  { path: '/news', label: 'News', icon: '\uD83D\uDCF0' },
+] as const;
+
+const NAV_BOTTOM = [
   { path: '/settings', label: 'Settings', icon: '\u2699\uFE0F' },
 ] as const;
 
 function Sidebar() {
   const location = useLocation();
+  const { status } = useSourceStatus();
+
+  const renderNavItem = (item: { path: string; label: string; icon: string; color?: string }, isActive: boolean) => (
+    <NavLink
+      key={item.path}
+      to={item.path}
+      style={{
+        ...navLink,
+        backgroundColor: isActive ? '#282828' : 'transparent',
+        color: isActive ? '#ffffff' : '#b3b3b3',
+      }}
+    >
+      <span style={{ fontSize: 16, width: 24, textAlign: 'center' }}>
+        {item.icon}
+      </span>
+      <span style={{ fontSize: 14, fontWeight: isActive ? 600 : 400 }}>
+        {item.label}
+      </span>
+    </NavLink>
+  );
 
   return (
     <nav style={sidebarStyle}>
@@ -268,37 +351,38 @@ function Sidebar() {
         <span style={logoText}>Media Hub</span>
       </div>
 
-      {/* Navigation links */}
+      {/* Main navigation links */}
       <div style={navSection}>
-        {NAV_ITEMS.map((item) => {
-          const isActive = location.pathname === item.path;
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              style={{
-                ...navLink,
-                backgroundColor: isActive ? '#282828' : 'transparent',
-                color: isActive ? '#ffffff' : '#b3b3b3',
-              }}
-            >
-              <span style={{ fontSize: 16, width: 24, textAlign: 'center' }}>
-                {item.icon}
-              </span>
-              <span style={{ fontSize: 14, fontWeight: isActive ? 600 : 400 }}>
-                {item.label}
-              </span>
-            </NavLink>
-          );
-        })}
+        {NAV_MAIN.map((item) => renderNavItem(item, location.pathname === item.path))}
+      </div>
+
+      {/* Media sources section */}
+      <div style={navDivider}>
+        <span style={navDividerText}>Media</span>
+      </div>
+      <div style={navSection}>
+        {NAV_MEDIA.map((item) => renderNavItem(item, location.pathname === item.path))}
+      </div>
+
+      {/* Widgets section */}
+      <div style={navDivider}>
+        <span style={navDividerText}>Widgets</span>
+      </div>
+      <div style={navSection}>
+        {NAV_WIDGETS.map((item) => renderNavItem(item, location.pathname === item.path))}
+      </div>
+
+      {/* Settings at bottom */}
+      <div style={{ ...navSection, marginTop: 'auto', paddingBottom: 8 }}>
+        {NAV_BOTTOM.map((item) => renderNavItem(item, location.pathname === item.path))}
       </div>
 
       {/* Source indicators */}
       <div style={sourceSection}>
         <div style={sourceSectionTitle}>Sources</div>
-        <SourceIndicator name="Spotify" color="#1db954" connected={false} />
-        <SourceIndicator name="YouTube" color="#ff0000" connected={false} />
-        <SourceIndicator name="Jellyfin" color="#aa5cc3" connected={false} />
+        <SourceIndicator name="Spotify" color="#1db954" connected={status.spotify} />
+        <SourceIndicator name="YouTube" color="#ff0000" connected={status.youtube} />
+        <SourceIndicator name="Jellyfin" color="#aa5cc3" connected={status.jellyfin} />
       </div>
     </nav>
   );
@@ -307,9 +391,15 @@ function Sidebar() {
 function SourceIndicator({ name, color, connected }: { name: string; color: string; connected: boolean }) {
   return (
     <div style={sourceRow}>
-      <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: connected ? color : '#4a4a4a' }} />
+      <div style={{
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        backgroundColor: connected ? color : '#4a4a4a',
+        boxShadow: connected ? `0 0 6px ${color}60` : 'none',
+      }} />
       <span style={{ fontSize: 12, color: connected ? '#b3b3b3' : '#6a6a6a' }}>{name}</span>
-      <span style={{ fontSize: 10, color: '#6a6a6a', marginLeft: 'auto' }}>
+      <span style={{ fontSize: 10, color: connected ? color : '#6a6a6a', marginLeft: 'auto', fontWeight: connected ? 500 : 400 }}>
         {connected ? 'Connected' : 'Offline'}
       </span>
     </div>
@@ -378,15 +468,16 @@ function AppLayout() {
               <Route path="/home" element={<HomePage />} />
               <Route path="/search" element={<SearchPage />} />
               <Route path="/library" element={<LibraryPage />} />
+              <Route path="/spotify" element={<SpotifyPage />} />
+              <Route path="/youtube" element={<YouTubePage />} />
+              <Route path="/weather" element={<WeatherPage />} />
+              <Route path="/news" element={<NewsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/home" replace />} />
             </Routes>
           </React.Suspense>
         </ErrorBoundary>
       </main>
-
-      {/* Dashboard panel (right) – placeholder, wired in next step */}
-      {/* <DashboardPanel /> */}
 
       {/* Playback bar (bottom) */}
       <PlaybackBarPlaceholder />
@@ -455,9 +546,20 @@ const navLink: CSSProperties = {
   transition: 'background-color 150ms ease',
 };
 
+const navDivider: CSSProperties = {
+  padding: '12px 20px 4px',
+};
+
+const navDividerText: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: '#4a4a4a',
+  textTransform: 'uppercase',
+  letterSpacing: 0.5,
+};
+
 const sourceSection: CSSProperties = {
-  marginTop: 'auto',
-  padding: '16px 20px',
+  padding: '12px 20px 16px',
   borderTop: '1px solid #181818',
 };
 
@@ -518,25 +620,6 @@ const pageSubtitle: CSSProperties = {
   marginBottom: 24,
 };
 
-const placeholderGrid: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-  gap: 16,
-};
-
-const cardStyle: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: 32,
-  borderRadius: 12,
-  backgroundColor: '#181818',
-  border: '1px solid #282828',
-  cursor: 'pointer',
-  transition: 'background-color 200ms ease',
-};
-
 const searchInputContainer: CSSProperties = {
   maxWidth: 600,
 };
@@ -550,4 +633,28 @@ const searchInputStyle: CSSProperties = {
   color: '#ffffff',
   fontSize: 14,
   outline: 'none',
+};
+
+const servicePrompt: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 48,
+  textAlign: 'center',
+  backgroundColor: '#181818',
+  borderRadius: 12,
+  border: '1px solid #282828',
+  maxWidth: 400,
+  margin: '0 auto',
+};
+
+const connectBtn: CSSProperties = {
+  padding: '10px 24px',
+  borderRadius: 9999,
+  border: 'none',
+  color: '#ffffff',
+  fontSize: 14,
+  fontWeight: 600,
+  cursor: 'pointer',
 };
