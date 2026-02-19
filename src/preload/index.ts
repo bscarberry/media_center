@@ -32,6 +32,12 @@ const electronAPI = {
   // OAuth helpers
   startOAuthServer: (port: number) => ipcRenderer.invoke('oauth:start-server', port),
 
+  // Auth status
+  auth: {
+    getStatus: () => ipcRenderer.invoke('auth:get-status') as Promise<{ spotify: boolean; youtube: boolean; jellyfin: boolean }>,
+    clearTokens: (service: string) => ipcRenderer.invoke('auth:clear-tokens', service) as Promise<boolean>,
+  },
+
   // Events from main process (tray controls, etc.)
   on: (channel: string, callback: (...args: unknown[]) => void) => {
     const validChannels = [

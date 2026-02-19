@@ -209,6 +209,74 @@ function setupIPC(): void {
     // for future migration to main process
     return { port };
   });
+
+  // -------------------------------------------------------------------------
+  // Auth status – check encrypted token stores for each service
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('auth:get-status', () => {
+    const result = { spotify: false, youtube: false, jellyfin: false };
+
+    try {
+      const spotifyStore = new Store<{ spotifyTokens: unknown }>({
+        name: 'spotify-tokens',
+        encryptionKey: 'brandons-media-hub-v1',
+        defaults: { spotifyTokens: null },
+      });
+      const tokens = spotifyStore.get('spotifyTokens');
+      result.spotify = tokens !== null && tokens !== undefined;
+    } catch { /* store not created yet */ }
+
+    try {
+      const ytStore = new Store<{ youtubeTokens: unknown }>({
+        name: 'youtube-tokens',
+        encryptionKey: 'brandons-media-hub-yt-v1',
+        defaults: { youtubeTokens: null },
+      });
+      const tokens = ytStore.get('youtubeTokens');
+      result.youtube = tokens !== null && tokens !== undefined;
+    } catch { /* store not created yet */ }
+
+    try {
+      const jfStore = new Store<{ jellyfinSession: unknown }>({
+        name: 'jellyfin-session',
+        encryptionKey: 'brandons-media-hub-jf-v1',
+        defaults: { jellyfinSession: null },
+      });
+      const session = jfStore.get('jellyfinSession');
+      result.jellyfin = session !== null && session !== undefined;
+    } catch { /* store not created yet */ }
+
+    return result;
+  });
+
+  ipcMain.handle('auth:clear-tokens', (_event, service: string) => {
+    try {
+      if (service === 'spotify') {
+        const s = new Store<{ spotifyTokens: unknown }>({
+          name: 'spotify-tokens',
+          encryptionKey: 'brandons-media-hub-v1',
+          defaults: { spotifyTokens: null },
+        });
+        s.set('spotifyTokens', null);
+      } else if (service === 'youtube') {
+        const s = new Store<{ youtubeTokens: unknown }>({
+          name: 'youtube-tokens',
+          encryptionKey: 'brandons-media-hub-yt-v1',
+          defaults: { youtubeTokens: null },
+        });
+        s.set('youtubeTokens', null);
+      } else if (service === 'jellyfin') {
+        const s = new Store<{ jellyfinSession: unknown }>({
+          name: 'jellyfin-session',
+          encryptionKey: 'brandons-media-hub-jf-v1',
+          defaults: { jellyfinSession: null },
+        });
+        s.set('jellyfinSession', null);
+      }
+    } catch { /* ignore */ }
+    return true;
+  });
 }
 
 // ---------------------------------------------------------------------------

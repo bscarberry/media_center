@@ -1,8 +1,12 @@
 // ============================================================================
 // useSourceStatus – checks connection status for Spotify, YouTube, Jellyfin
 // ============================================================================
+//
+// Queries the main process via IPC to check whether encrypted token stores
+// contain valid credentials for each media service.
+// ============================================================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface SourceStatus {
   spotify: boolean;
@@ -10,72 +14,85 @@ export interface SourceStatus {
   jellyfin: boolean;
 }
 
+// Type-safe access to the electron bridge
+interface ElectronAuthAPI {
+  auth: {
+    getStatus: () => Promise<SourceStatus>;
+    clearTokens: (service: string) => Promise<boolean>;
+  };
+}
+
+function getElectronAPI(): ElectronAuthAPI | null {
+  const api = (window as any).electronAPI;
+  if (api?.auth?.getStatus) return api as ElectronAuthAPI;
+  return null;
+}
+
+const DEFAULT_STATUS: SourceStatus = { spotify: false, youtube: false, jellyfin: false };
+
 /**
- * Periodically checks whether each media source has stored credentials.
- * Returns a reactive status object and a manual refresh function.
+ * Periodically checks whether each media source has stored credentials
+ * by querying the main process encrypted token stores via IPC.
  */
-export function useSourceStatus(intervalMs = 10_000): {
+export function useSourceStatus(intervalMs = 5_000): {
   status: SourceStatus;
+  loading: boolean;
   refresh: () => void;
 } {
-  const check = useCallback((): SourceStatus => {
-    let spotify = false;
-    let youtube = false;
-    let jellyfin = false;
+  const [status, setStatus] = useState<SourceStatus>(DEFAULT_STATUS);
+  const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
 
-    try {
-      // Spotify stores tokens in electron-store (encrypted).
-      // The simplest renderer-safe check: look for the localStorage fallback
-      // or check if the IPC bridge can confirm tokens exist.
-      // Since TokenManager uses electron-store, we check via the preload bridge
-      // if available, otherwise check localStorage as a secondary indicator.
-      const spotifyStorage = localStorage.getItem('media-hub:spotify-connected');
-      spotify = spotifyStorage === 'true';
-
-      // Also check if the window has the electronAPI with store access
-      if (!spotify && (window as any).electronAPI?.getStoreValue) {
-        // Async – will update on next tick via effect
+  const refresh = useCallback(async () => {
+    const api = getElectronAPI();
+    if (!api) {
+      // Not running in Electron – fall back to localStorage
+      const result = { ...DEFAULT_STATUS };
+      try {
+        result.spotify = localStorage.getItem('media-hub:spotify-connected') === 'true';
+        result.youtube = localStorage.getItem('media-hub:youtube-connected') === 'true';
+        result.jellyfin = localStorage.getItem('media-hub:jellyfin-connected') === 'true';
+      } catch { /* ignore */ }
+      if (mountedRef.current) {
+        setStatus(result);
+        setLoading(false);
       }
-    } catch {
-      // ignore
+      return;
     }
 
     try {
-      const ytStorage = localStorage.getItem('media-hub:youtube-connected');
-      youtube = ytStorage === 'true';
-    } catch {
-      // ignore
+      const result = await api.auth.getStatus();
+      if (mountedRef.current) {
+        setStatus(result);
+        setLoading(false);
+      }
+    } catch (err) {
+      console.warn('[useSourceStatus] Failed to check auth status:', err);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
-
-    try {
-      const jfStorage = localStorage.getItem('media-hub:jellyfin-connected');
-      jellyfin = jfStorage === 'true';
-    } catch {
-      // ignore
-    }
-
-    return { spotify, youtube, jellyfin };
   }, []);
 
-  const [status, setStatus] = useState<SourceStatus>(check);
-
-  const refresh = useCallback(() => {
-    setStatus(check());
-  }, [check]);
-
+  // Initial check + periodic polling
   useEffect(() => {
+    mountedRef.current = true;
+    refresh();
     const timer = setInterval(refresh, intervalMs);
-    return () => clearInterval(timer);
+    return () => {
+      mountedRef.current = false;
+      clearInterval(timer);
+    };
   }, [refresh, intervalMs]);
 
   // Listen for custom events fired when services connect/disconnect
   useEffect(() => {
-    const handler = () => refresh();
+    const handler = () => { refresh(); };
     window.addEventListener('media-hub:source-changed', handler);
     return () => window.removeEventListener('media-hub:source-changed', handler);
   }, [refresh]);
 
-  return { status, refresh };
+  return { status, loading, refresh };
 }
 
 /**
@@ -89,4 +106,18 @@ export function setSourceConnected(source: 'spotify' | 'youtube' | 'jellyfin', c
   } catch {
     // Storage unavailable
   }
+}
+
+/**
+ * Disconnect a service by clearing its tokens from the encrypted store.
+ */
+export async function disconnectSource(source: 'spotify' | 'youtube' | 'jellyfin'): Promise<boolean> {
+  const api = getElectronAPI();
+  if (api) {
+    const result = await api.auth.clearTokens(source);
+    setSourceConnected(source, false);
+    return result;
+  }
+  setSourceConnected(source, false);
+  return true;
 }

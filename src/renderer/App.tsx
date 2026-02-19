@@ -16,6 +16,7 @@ import {
   NavLink,
   Navigate,
   useLocation,
+  useNavigate,
 } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HomePage } from './components/home/HomePage';
@@ -171,41 +172,121 @@ function LibraryPage() {
   );
 }
 
-function SpotifyPage() {
+function ServicePage({
+  name,
+  icon,
+  color,
+  source,
+  description,
+  connectText,
+}: {
+  name: string;
+  icon: string;
+  color: string;
+  source: 'spotify' | 'youtube' | 'jellyfin';
+  description: string;
+  connectText: string;
+}) {
+  const { status, loading, refresh } = useSourceStatus();
+  const connected = status[source];
+
+  const handleDisconnect = useCallback(async () => {
+    const { disconnectSource } = await import('./hooks/useSourceStatus');
+    await disconnectSource(source);
+    refresh();
+  }, [source, refresh]);
+
   return (
     <div style={pageStyle}>
       <h1 style={pageTitle}>
-        <span style={{ color: '#1db954' }}>{'\uD83C\uDFB5'}</span> Spotify
+        <span style={{ color }}>{icon}</span> {name}
       </h1>
-      <p style={pageSubtitle}>Browse and play music from Spotify.</p>
-      <div style={servicePrompt}>
-        <span style={{ fontSize: 48 }}>{'\uD83C\uDFB5'}</span>
-        <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>Connect to Spotify</h3>
-        <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>Sign in to browse playlists, albums, and play music.</p>
-        <button style={{ ...connectBtn, backgroundColor: '#1db954' }}>Connect Spotify</button>
+      <p style={pageSubtitle}>{description}</p>
+
+      {/* Connection status banner */}
+      <div style={{
+        ...statusBanner,
+        borderColor: connected ? color + '40' : '#282828',
+        backgroundColor: connected ? color + '10' : '#181818',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 10,
+            height: 10,
+            borderRadius: '50%',
+            backgroundColor: loading ? '#f59e0b' : connected ? color : '#4a4a4a',
+            boxShadow: connected ? `0 0 8px ${color}60` : 'none',
+          }} />
+          <span style={{ fontSize: 14, fontWeight: 500, color: '#ffffff' }}>
+            {loading ? 'Checking...' : connected ? 'Connected' : 'Not connected'}
+          </span>
+        </div>
+        {connected ? (
+          <button onClick={handleDisconnect} style={{ ...connectBtn, backgroundColor: '#4a4a4a', fontSize: 12, padding: '6px 16px' }}>
+            Disconnect
+          </button>
+        ) : (
+          <button style={{ ...connectBtn, backgroundColor: color, fontSize: 12, padding: '6px 16px' }}>
+            {connectText}
+          </button>
+        )}
       </div>
+
+      {/* Content area */}
+      {!connected && (
+        <div style={servicePrompt}>
+          <span style={{ fontSize: 48 }}>{icon}</span>
+          <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>Connect to {name}</h3>
+          <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>
+            {source === 'spotify' && 'Set your SPOTIFY_CLIENT_ID in .env and click Connect to sign in via OAuth.'}
+            {source === 'youtube' && 'Set your YOUTUBE_API_KEY and OAuth credentials in .env and click Connect.'}
+            {source === 'jellyfin' && 'Set your JELLYFIN_SERVER_URL and credentials in .env and click Connect.'}
+          </p>
+          <button style={{ ...connectBtn, backgroundColor: color }}>{connectText}</button>
+        </div>
+      )}
+
+      {connected && (
+        <div style={{ marginTop: 24 }}>
+          <div style={{ ...widgetCardInline, borderColor: color + '30' }}>
+            <p style={{ fontSize: 14, color: '#b3b3b3' }}>
+              {name} is connected. Browse your content using the library or search.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function SpotifyPage() {
+  return (
+    <ServicePage
+      name="Spotify"
+      icon={'\uD83C\uDFB5'}
+      color="#1db954"
+      source="spotify"
+      description="Browse and play music from Spotify."
+      connectText="Connect Spotify"
+    />
   );
 }
 
 function YouTubePage() {
   return (
-    <div style={pageStyle}>
-      <h1 style={pageTitle}>
-        <span style={{ color: '#ff0000' }}>{'\u25B6\uFE0F'}</span> YouTube
-      </h1>
-      <p style={pageSubtitle}>Watch videos and listen to music from YouTube.</p>
-      <div style={servicePrompt}>
-        <span style={{ fontSize: 48 }}>{'\u25B6\uFE0F'}</span>
-        <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>Connect to YouTube</h3>
-        <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>Sign in to access playlists and play videos.</p>
-        <button style={{ ...connectBtn, backgroundColor: '#ff0000' }}>Connect YouTube</button>
-      </div>
-    </div>
+    <ServicePage
+      name="YouTube"
+      icon={'\u25B6\uFE0F'}
+      color="#ff0000"
+      source="youtube"
+      description="Watch videos and listen to music from YouTube."
+      connectText="Connect YouTube"
+    />
   );
 }
 
 function WeatherPage() {
+  const navigate = useNavigate();
   return (
     <div style={pageStyle}>
       <h1 style={pageTitle}>
@@ -216,13 +297,14 @@ function WeatherPage() {
         <span style={{ fontSize: 48 }}>{'\u2601\uFE0F'}</span>
         <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>Weather Dashboard</h3>
         <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>Add your OpenWeatherMap API key in Settings to get started.</p>
-        <button style={{ ...connectBtn, backgroundColor: '#4fc3f7' }}>Go to Settings</button>
+        <button onClick={() => navigate('/settings')} style={{ ...connectBtn, backgroundColor: '#4fc3f7' }}>Go to Settings</button>
       </div>
     </div>
   );
 }
 
 function NewsPage() {
+  const navigate = useNavigate();
   return (
     <div style={pageStyle}>
       <h1 style={pageTitle}>
@@ -233,21 +315,26 @@ function NewsPage() {
         <span style={{ fontSize: 48 }}>{'\uD83D\uDCF0'}</span>
         <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>News Feed</h3>
         <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>Add your NewsAPI key in Settings to get started.</p>
-        <button style={{ ...connectBtn, backgroundColor: '#ff9800' }}>Go to Settings</button>
+        <button onClick={() => navigate('/settings')} style={{ ...connectBtn, backgroundColor: '#ff9800' }}>Go to Settings</button>
       </div>
     </div>
   );
 }
 
 function SettingsPage() {
+  const { status, loading } = useSourceStatus();
+
+  const statusLabel = (connected: boolean) =>
+    loading ? 'Checking...' : connected ? 'Connected' : 'Not connected';
+
   return (
     <div style={pageStyle}>
       <h1 style={pageTitle}>Settings</h1>
       <div style={{ maxWidth: 600 }}>
         <SettingsSection title="Connected Services">
-          <SettingsRow label="Spotify" value="Not connected" action="Connect" />
-          <SettingsRow label="YouTube" value="Not connected" action="Connect" />
-          <SettingsRow label="Jellyfin" value="Not connected" action="Connect" />
+          <SettingsRow label="Spotify" value={statusLabel(status.spotify)} action={status.spotify ? 'Disconnect' : 'Connect'} statusColor={status.spotify ? '#1db954' : undefined} />
+          <SettingsRow label="YouTube" value={statusLabel(status.youtube)} action={status.youtube ? 'Disconnect' : 'Connect'} statusColor={status.youtube ? '#ff0000' : undefined} />
+          <SettingsRow label="Jellyfin" value={statusLabel(status.jellyfin)} action={status.jellyfin ? 'Disconnect' : 'Connect'} statusColor={status.jellyfin ? '#aa5cc3' : undefined} />
         </SettingsSection>
         <SettingsSection title="Dashboard Widgets">
           <SettingsRow label="Weather API Key" value="Not configured" action="Configure" />
@@ -277,12 +364,17 @@ function SettingsSection({ title, children }: { title: string; children: ReactNo
   );
 }
 
-function SettingsRow({ label, value, action }: { label: string; value: string; action?: string }) {
+function SettingsRow({ label, value, action, statusColor }: { label: string; value: string; action?: string; statusColor?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #282828' }}>
-      <span style={{ fontSize: 14, color: '#ffffff' }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {statusColor !== undefined && (
+          <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: statusColor || '#4a4a4a' }} />
+        )}
+        <span style={{ fontSize: 14, color: '#ffffff' }}>{label}</span>
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <span style={{ fontSize: 13, color: '#6a6a6a' }}>{value}</span>
+        <span style={{ fontSize: 13, color: statusColor || '#6a6a6a' }}>{value}</span>
         {action && (
           <button style={{ padding: '4px 12px', borderRadius: 9999, border: '1px solid #282828', background: 'none', color: '#b3b3b3', fontSize: 12, cursor: 'pointer' }}>
             {action}
@@ -657,4 +749,21 @@ const connectBtn: CSSProperties = {
   fontSize: 14,
   fontWeight: 600,
   cursor: 'pointer',
+};
+
+const statusBanner: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '12px 16px',
+  borderRadius: 8,
+  border: '1px solid #282828',
+  marginBottom: 24,
+};
+
+const widgetCardInline: CSSProperties = {
+  padding: 20,
+  borderRadius: 8,
+  border: '1px solid #282828',
+  backgroundColor: '#181818',
 };
