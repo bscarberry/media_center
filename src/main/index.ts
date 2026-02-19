@@ -22,32 +22,45 @@ import Store from 'electron-store';
 // ---------------------------------------------------------------------------
 
 function loadDotEnv(): void {
-  const envPath = path.join(app.getAppPath(), '.env');
-  try {
-    if (fs.existsSync(envPath)) {
-      const content = fs.readFileSync(envPath, 'utf-8');
-      for (const line of content.split('\n')) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) continue;
-        const eqIdx = trimmed.indexOf('=');
-        if (eqIdx === -1) continue;
-        const key = trimmed.slice(0, eqIdx).trim();
-        let val = trimmed.slice(eqIdx + 1).trim();
-        // Strip surrounding quotes
-        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-          val = val.slice(1, -1);
+  // Check multiple locations where .env might live
+  const candidates = [
+    path.join(process.cwd(), '.env'),                           // current working directory
+    path.join(app.getAppPath(), '.env'),                        // app path (dev mode)
+    path.join(path.dirname(app.getAppPath()), '.env'),          // parent of app.asar (packaged)
+    path.join(app.getPath('userData'), '.env'),                 // user data dir (e.g. ~/.config/media-hub)
+    path.join(process.resourcesPath ?? app.getAppPath(), '.env'), // resources dir (packaged)
+  ];
+
+  console.log('[main] Searching for .env in:', candidates);
+
+  for (const envPath of candidates) {
+    try {
+      if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf-8');
+        for (const line of content.split('\n')) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith('#')) continue;
+          const eqIdx = trimmed.indexOf('=');
+          if (eqIdx === -1) continue;
+          const key = trimmed.slice(0, eqIdx).trim();
+          let val = trimmed.slice(eqIdx + 1).trim();
+          // Strip surrounding quotes
+          if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1);
+          }
+          if (!process.env[key]) {
+            process.env[key] = val;
+          }
         }
-        if (!process.env[key]) {
-          process.env[key] = val;
-        }
+        console.log('[main] Loaded .env from', envPath);
+        return;
       }
-      console.log('[main] Loaded .env from', envPath);
-    } else {
-      console.log('[main] No .env file found at', envPath);
+    } catch (err) {
+      console.warn('[main] Failed to read .env at', envPath, err);
     }
-  } catch (err) {
-    console.warn('[main] Failed to load .env:', err);
   }
+
+  console.log('[main] No .env file found in any of the searched locations');
 }
 
 loadDotEnv();
