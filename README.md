@@ -50,6 +50,13 @@ cp .env.example .env
 
 Open `.env` in your editor and fill in the values. See [API Setup](#api-setup) for instructions on obtaining each key.
 
+> **Packaged app note:** If you are running a built executable (e.g. from `out\win-arm64-unpacked\`) rather than `npm run dev`, place the `.env` file in the **same folder as the executable**. For example:
+> ```
+> out\win-arm64-unpacked\.env        ← place it here, next to Media Hub.exe
+> out\win-arm64-unpacked\Media Hub.exe
+> ```
+> The app searches the executable's directory first when running as a packaged build.
+
 ### 4. Run in development mode
 
 ```bash
@@ -266,7 +273,6 @@ media_center/
 │       │   └── news/          #   NewsAPI service
 │       ├── stores/            #   Zustand state management
 │       ├── hooks/             #   Custom React hooks
-│       ├── config/            #   Environment config loaders
 │       ├── types/             #   TypeScript type definitions
 │       ├── utils/             #   Utility functions
 │       └── styles/            #   Global CSS, Tailwind base

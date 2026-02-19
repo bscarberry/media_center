@@ -24,6 +24,7 @@ import Store from 'electron-store';
 function loadDotEnv(): void {
   // Check multiple locations where .env might live
   const candidates = [
+    path.join(path.dirname(app.getPath('exe')), '.env'),        // directory containing the executable (packaged)
     path.join(process.cwd(), '.env'),                           // current working directory
     path.join(app.getAppPath(), '.env'),                        // app path (dev mode)
     path.join(path.dirname(app.getAppPath()), '.env'),          // parent of app.asar (packaged)
