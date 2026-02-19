@@ -332,7 +332,7 @@ function setupIPC(): void {
   ipcMain.handle('config:get-env', () => {
     return {
       SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID || '',
-      SPOTIFY_REDIRECT_URI: process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:8888/callback',
+      SPOTIFY_REDIRECT_URI: process.env.SPOTIFY_REDIRECT_URI || 'http://127.0.0.1:8888/callback',
       YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || '',
       YOUTUBE_PLAYBACK_MODE: process.env.YOUTUBE_PLAYBACK_MODE || 'iframe',
       YOUTUBE_OAUTH_CLIENT_ID: process.env.YOUTUBE_OAUTH_CLIENT_ID || '',
@@ -387,7 +387,7 @@ function setupIPC(): void {
 
   ipcMain.handle('auth:spotify-login', async () => {
     const clientId = process.env.SPOTIFY_CLIENT_ID;
-    const redirectUri = process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:8888/callback';
+    const redirectUri = process.env.SPOTIFY_REDIRECT_URI || 'http://127.0.0.1:8888/callback';
 
     if (!clientId) {
       return { success: false, error: 'SPOTIFY_CLIENT_ID not set in .env' };

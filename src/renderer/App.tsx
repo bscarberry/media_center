@@ -26,6 +26,10 @@ import { useSourceStatus, disconnectSource } from './hooks/useSourceStatus';
 import { UnifiedSearch } from './components/library/UnifiedSearch';
 import { SearchService } from './services/search/SearchService';
 import { YouTubeService } from './services/youtube/YouTubeService';
+import { WeatherService, weatherConditionIcon, formatTemp } from './services/weather/WeatherService';
+import { NewsService, timeAgo, categoryLabel } from './services/news/NewsService';
+import type { WeatherData, NewsArticle, NewsCategory } from './types/dashboard';
+import { NEWS_CATEGORIES } from './types/dashboard';
 
 // ---------------------------------------------------------------------------
 // Providers & Stores
@@ -579,17 +583,119 @@ function YouTubePage() {
 
 function WeatherPage() {
   const navigate = useNavigate();
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [noKey, setNoKey] = useState(false);
+
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.getConfig) { setLoading(false); return; }
+    api.getConfig().then(async (cfg: Record<string, string>) => {
+      if (!cfg.WEATHER_API_KEY) { setNoKey(true); setLoading(false); return; }
+      const unit: 'C' | 'F' = cfg.WEATHER_UNIT?.toLowerCase().startsWith('c') ? 'C' : 'F';
+      const svc = new WeatherService({ apiKey: cfg.WEATHER_API_KEY, unit });
+      try {
+        let lat: number, lon: number;
+        if (cfg.WEATHER_DEFAULT_LAT && cfg.WEATHER_DEFAULT_LON) {
+          lat = parseFloat(cfg.WEATHER_DEFAULT_LAT);
+          lon = parseFloat(cfg.WEATHER_DEFAULT_LON);
+        } else {
+          const pos = await new Promise<GeolocationPosition>((res, rej) =>
+            navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000 }),
+          );
+          lat = pos.coords.latitude;
+          lon = pos.coords.longitude;
+        }
+        const loc = (await svc.reverseGeocode(lat, lon).catch(() => null))
+          ?? { name: 'Your Location', lat, lon, country: '' };
+        setWeather(await svc.getWeather(loc));
+      } catch (err: any) {
+        setError(err?.message ?? 'Failed to fetch weather. Check your API key and location settings.');
+      }
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={pageStyle}>
+        <h1 style={pageTitle}>{'\u2601\uFE0F'} Weather</h1>
+        <p style={{ color: '#b3b3b3', fontSize: 14 }}>Loading weather data...</p>
+      </div>
+    );
+  }
+
+  if (noKey) {
+    return (
+      <div style={pageStyle}>
+        <h1 style={pageTitle}>{'\u2601\uFE0F'} Weather</h1>
+        <div style={servicePrompt}>
+          <span style={{ fontSize: 48 }}>{'\u2601\uFE0F'}</span>
+          <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>Weather Dashboard</h3>
+          <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>Add your OpenWeatherMap API key in Settings to get started.</p>
+          <button onClick={() => navigate('/settings')} style={{ ...connectBtn, backgroundColor: '#4fc3f7' }}>Go to Settings</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !weather) {
+    return (
+      <div style={pageStyle}>
+        <h1 style={pageTitle}>{'\u2601\uFE0F'} Weather</h1>
+        <p style={pageSubtitle}>Current conditions, hourly forecast, and 7-day outlook.</p>
+        <div style={{ padding: '10px 14px', borderRadius: 6, backgroundColor: '#3a1a1a', border: '1px solid #ff4444', fontSize: 13, color: '#ff8888' }}>
+          {error ?? 'No weather data available.'}
+        </div>
+      </div>
+    );
+  }
+
+  const { current, daily, location: loc } = weather;
   return (
     <div style={pageStyle}>
-      <h1 style={pageTitle}>
-        {'\u2601\uFE0F'} Weather
-      </h1>
-      <p style={pageSubtitle}>Current conditions, hourly forecast, and 7-day outlook.</p>
-      <div style={servicePrompt}>
-        <span style={{ fontSize: 48 }}>{'\u2601\uFE0F'}</span>
-        <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>Weather Dashboard</h3>
-        <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>Add your OpenWeatherMap API key in Settings to get started.</p>
-        <button onClick={() => navigate('/settings')} style={{ ...connectBtn, backgroundColor: '#4fc3f7' }}>Go to Settings</button>
+      <h1 style={pageTitle}>{'\u2601\uFE0F'} Weather</h1>
+      <p style={pageSubtitle}>
+        {loc.name}{loc.region ? `, ${loc.region}` : ''}{loc.country ? `, ${loc.country}` : ''}
+      </p>
+
+      {/* Current conditions */}
+      <div style={{ ...widgetCardInline, padding: 24, marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 72, lineHeight: 1 }}>{weatherConditionIcon(current.condition)}</span>
+          <div>
+            <div style={{ fontSize: 64, fontWeight: 800, color: '#ffffff', lineHeight: 1 }}>{current.temp}°</div>
+            <div style={{ fontSize: 14, color: '#b3b3b3', marginTop: 6, textTransform: 'capitalize' }}>{current.description}</div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 40px', marginLeft: 8 }}>
+            {([['Feels like', `${current.feelsLike}°`], ['Humidity', `${current.humidity}%`], ['Wind', `${current.windSpeed} mph`], ['UV Index', String(current.uvIndex)]] as [string, string][]).map(([label, val]) => (
+              <div key={label}>
+                <div style={{ fontSize: 11, color: '#6a6a6a', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: '#ffffff', marginTop: 2 }}>{val}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 7-day forecast */}
+      <h3 style={{ fontSize: 13, fontWeight: 600, color: '#6a6a6a', marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>7-Day Forecast</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {daily.map((d, i) => {
+          const label = i === 0 ? 'Today' : new Date(d.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+          return (
+            <div key={d.date} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderRadius: 6, backgroundColor: '#181818', border: '1px solid #282828' }}>
+              <span style={{ width: 130, fontSize: 13, color: '#b3b3b3', flexShrink: 0 }}>{label}</span>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{weatherConditionIcon(d.condition)}</span>
+              <span style={{ fontSize: 12, color: '#6a6a6a', flex: 1, textTransform: 'capitalize' }}>{d.condition.replace(/_/g, ' ')}</span>
+              {d.precipProbability > 0 && <span style={{ fontSize: 11, color: '#4fc3f7' }}>💧 {d.precipProbability}%</span>}
+              <span style={{ fontSize: 13, color: '#6a6a6a', marginLeft: 8 }}>{d.low}°</span>
+              <span style={{ fontSize: 13, color: '#6a6a6a', margin: '0 4px' }}>/</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>{d.high}°</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -597,25 +703,115 @@ function WeatherPage() {
 
 function NewsPage() {
   const navigate = useNavigate();
+  const [articles, setArticles] = useState<NewsArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [noKey, setNoKey] = useState(false);
+  const [category, setCategory] = useState<NewsCategory>('all');
+  const [svc, setSvc] = useState<NewsService | null>(null);
+
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.getConfig) { setLoading(false); return; }
+    api.getConfig().then((cfg: Record<string, string>) => {
+      if (!cfg.NEWS_API_KEY) { setNoKey(true); setLoading(false); return; }
+      setSvc(new NewsService({ apiKey: cfg.NEWS_API_KEY }));
+    }).catch(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (!svc) return;
+    setLoading(true);
+    setError(null);
+    svc.getHeadlines(category).then(({ articles: arts }) => {
+      setArticles(arts);
+      setLoading(false);
+    }).catch((err: any) => {
+      setError(err?.message ?? 'Failed to fetch headlines.');
+      setLoading(false);
+    });
+  }, [svc, category]);
+
+  const openArticle = useCallback((url: string) => {
+    const api = (window as any).electronAPI;
+    if (api?.openExternal) api.openExternal(url);
+  }, []);
+
+  if (noKey) {
+    return (
+      <div style={pageStyle}>
+        <h1 style={pageTitle}>{'\uD83D\uDCF0'} News</h1>
+        <div style={servicePrompt}>
+          <span style={{ fontSize: 48 }}>{'\uD83D\uDCF0'}</span>
+          <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>News Feed</h3>
+          <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>Add your NewsAPI key in Settings to get started.</p>
+          <button onClick={() => navigate('/settings')} style={{ ...connectBtn, backgroundColor: '#ff9800' }}>Go to Settings</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={pageStyle}>
-      <h1 style={pageTitle}>
-        {'\uD83D\uDCF0'} News
-      </h1>
+      <h1 style={pageTitle}>{'\uD83D\uDCF0'} News</h1>
       <p style={pageSubtitle}>Top headlines, trending stories, and personalized news feed.</p>
-      <div style={servicePrompt}>
-        <span style={{ fontSize: 48 }}>{'\uD83D\uDCF0'}</span>
-        <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>News Feed</h3>
-        <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>Add your NewsAPI key in Settings to get started.</p>
-        <button onClick={() => navigate('/settings')} style={{ ...connectBtn, backgroundColor: '#ff9800' }}>Go to Settings</button>
+
+      {/* Category pills */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+        {NEWS_CATEGORIES.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => setCategory(cat)}
+            style={{
+              padding: '6px 14px', borderRadius: 9999, fontSize: 12, fontWeight: 500, cursor: 'pointer',
+              backgroundColor: cat === category ? '#ff9800' : '#181818',
+              color: cat === category ? '#000000' : '#b3b3b3',
+              border: `1px solid ${cat === category ? '#ff9800' : '#282828'}`,
+            }}
+          >
+            {categoryLabel(cat)}
+          </button>
+        ))}
+      </div>
+
+      {error && (
+        <div style={{ padding: '10px 14px', borderRadius: 6, backgroundColor: '#3a1a1a', border: '1px solid #ff4444', fontSize: 13, color: '#ff8888', marginBottom: 16 }}>
+          {error}
+        </div>
+      )}
+
+      {loading && !articles.length && (
+        <p style={{ color: '#b3b3b3', fontSize: 14 }}>Loading headlines...</p>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {articles.map((article) => (
+          <button
+            key={article.id}
+            onClick={() => openArticle(article.url)}
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 16px', borderRadius: 6,
+              backgroundColor: '#181818', border: '1px solid #282828', cursor: 'pointer', textAlign: 'left', width: '100%',
+            }}
+          >
+            {article.imageUrl && (
+              <img src={article.imageUrl} alt="" style={{ width: 80, height: 54, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: '#ffffff', lineHeight: 1.4, marginBottom: 4 }}>{article.title}</div>
+              <div style={{ fontSize: 11, color: '#6a6a6a' }}>{article.source} · {timeAgo(article.publishedAt)}</div>
+            </div>
+          </button>
+        ))}
       </div>
     </div>
   );
 }
 
 function SettingsPage() {
-  const { status, loading } = useSourceStatus();
+  const { status, loading, refresh } = useSourceStatus();
   const [config, setConfig] = useState<Record<string, string> | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     const api = (window as any).electronAPI;
@@ -632,14 +828,36 @@ function SettingsPage() {
   const widgetLabel = (configured: boolean) =>
     config === null ? 'Checking...' : configured ? 'Configured' : 'Not configured';
 
+  const handleService = useCallback(async (source: 'spotify' | 'youtube' | 'jellyfin', connected: boolean) => {
+    const api = (window as any).electronAPI;
+    if (!api?.auth) return;
+    setActionError(null);
+    if (connected) {
+      await disconnectSource(source);
+      refresh();
+    } else {
+      let result: { success: boolean; error?: string };
+      if (source === 'spotify') result = await api.auth.spotifyLogin();
+      else if (source === 'youtube') result = await api.auth.youtubeLogin();
+      else result = await api.auth.jellyfinLogin();
+      if (result.success) refresh();
+      else setActionError(result.error ?? 'Connection failed');
+    }
+  }, [refresh]);
+
   return (
     <div style={pageStyle}>
       <h1 style={pageTitle}>Settings</h1>
+      {actionError && (
+        <div style={{ maxWidth: 600, padding: '10px 14px', borderRadius: 6, backgroundColor: '#3a1a1a', border: '1px solid #ff4444', fontSize: 13, color: '#ff8888', marginBottom: 16 }}>
+          {actionError}
+        </div>
+      )}
       <div style={{ maxWidth: 600 }}>
         <SettingsSection title="Connected Services">
-          <SettingsRow label="Spotify" value={statusLabel(status.spotify)} action={status.spotify ? 'Disconnect' : 'Connect'} statusColor={status.spotify ? '#1db954' : undefined} />
-          <SettingsRow label="YouTube" value={statusLabel(status.youtube)} action={status.youtube ? 'Disconnect' : 'Connect'} statusColor={status.youtube ? '#ff0000' : undefined} />
-          <SettingsRow label="Jellyfin" value={statusLabel(status.jellyfin)} action={status.jellyfin ? 'Disconnect' : 'Connect'} statusColor={status.jellyfin ? '#aa5cc3' : undefined} />
+          <SettingsRow label="Spotify" value={statusLabel(status.spotify)} action={status.spotify ? 'Disconnect' : 'Connect'} statusColor={status.spotify ? '#1db954' : undefined} onAction={() => handleService('spotify', status.spotify)} />
+          <SettingsRow label="YouTube" value={statusLabel(status.youtube)} action={status.youtube ? 'Disconnect' : 'Connect'} statusColor={status.youtube ? '#ff0000' : undefined} onAction={() => handleService('youtube', status.youtube)} />
+          <SettingsRow label="Jellyfin" value={statusLabel(status.jellyfin)} action={status.jellyfin ? 'Disconnect' : 'Connect'} statusColor={status.jellyfin ? '#aa5cc3' : undefined} onAction={() => handleService('jellyfin', status.jellyfin)} />
         </SettingsSection>
         <SettingsSection title="Dashboard Widgets">
           <SettingsRow label="Weather API Key" value={widgetLabel(weatherConfigured)} statusColor={weatherConfigured ? '#4fc3f7' : undefined} />
@@ -669,7 +887,7 @@ function SettingsSection({ title, children }: { title: string; children: ReactNo
   );
 }
 
-function SettingsRow({ label, value, action, statusColor }: { label: string; value: string; action?: string; statusColor?: string }) {
+function SettingsRow({ label, value, action, statusColor, onAction }: { label: string; value: string; action?: string; statusColor?: string; onAction?: () => void }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #282828' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -681,7 +899,7 @@ function SettingsRow({ label, value, action, statusColor }: { label: string; val
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ fontSize: 13, color: statusColor || '#6a6a6a' }}>{value}</span>
         {action && (
-          <button style={{ padding: '4px 12px', borderRadius: 9999, border: '1px solid #282828', background: 'none', color: '#b3b3b3', fontSize: 12, cursor: 'pointer' }}>
+          <button onClick={onAction} style={{ padding: '4px 12px', borderRadius: 9999, border: '1px solid #282828', background: 'none', color: '#b3b3b3', fontSize: 12, cursor: 'pointer' }}>
             {action}
           </button>
         )}

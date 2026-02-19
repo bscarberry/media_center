@@ -96,7 +96,7 @@ Spotify is used for music streaming via the Web Playback SDK. Authentication use
 2. Click **Create App**
 3. Fill in:
    - **App name**: anything (e.g. "Media Hub")
-   - **Redirect URI**: `http://localhost:8888/callback`
+   - **Redirect URI**: `http://127.0.0.1:8888/callback` (use the IP address, not `localhost` — Spotify enforces this distinction)
    - **APIs used**: check **Web Playback SDK** and **Web API**
 4. Click **Create**
 5. On the app's overview page, copy the **Client ID**
@@ -107,13 +107,13 @@ Add to `.env`:
 
 ```
 SPOTIFY_CLIENT_ID=your_client_id_here
-SPOTIFY_REDIRECT_URI=http://localhost:8888/callback
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:8888/callback
 ```
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `SPOTIFY_CLIENT_ID` | Yes | Your Spotify app's Client ID |
-| `SPOTIFY_REDIRECT_URI` | No | OAuth callback URL (default: `http://localhost:8888/callback`) |
+| `SPOTIFY_REDIRECT_URI` | No | OAuth callback URL (default: `http://127.0.0.1:8888/callback`) — must match exactly what is set in the Spotify Developer Dashboard |
 
 ---
 
