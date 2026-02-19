@@ -48,11 +48,16 @@ function loadDotEnv(): void {
           if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
             val = val.slice(1, -1);
           }
-          if (!process.env[key]) {
+          if (process.env[key] === undefined) {
             process.env[key] = val;
           }
         }
+        const loadedKeys = content.split('\n')
+          .map(l => l.trim())
+          .filter(l => l && !l.startsWith('#') && l.includes('='))
+          .map(l => l.slice(0, l.indexOf('=')).trim());
         console.log('[main] Loaded .env from', envPath);
+        console.log('[main] .env keys found:', loadedKeys.join(', '));
         return;
       }
     } catch (err) {

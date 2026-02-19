@@ -23,6 +23,9 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HomePage } from './components/home/HomePage';
 import { useSourceStatus, disconnectSource } from './hooks/useSourceStatus';
+import { UnifiedSearch } from './components/library/UnifiedSearch';
+import { SearchService } from './services/search/SearchService';
+import { YouTubeService } from './services/youtube/YouTubeService';
 
 // ---------------------------------------------------------------------------
 // Providers & Stores
@@ -148,6 +151,55 @@ function PageSkeleton() {
 // ---------------------------------------------------------------------------
 
 function SearchPage() {
+  const [searchService, setSearchService] = useState<SearchService | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const api = (window as any).electronAPI;
+    if (!api?.getConfig) {
+      setLoading(false);
+      return;
+    }
+
+    api.getConfig().then((config: Record<string, string>) => {
+      if (cancelled) return;
+      const deps: { youtubeService?: YouTubeService } = {};
+      if (config.YOUTUBE_API_KEY) {
+        deps.youtubeService = new YouTubeService({
+          apiKey: config.YOUTUBE_API_KEY,
+          playbackMode: (config.YOUTUBE_PLAYBACK_MODE as 'iframe' | 'extract') || 'iframe',
+        });
+      }
+      setSearchService(new SearchService(deps));
+      setLoading(false);
+    }).catch(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading) {
+    return (
+      <div style={pageStyle}>
+        <h1 style={pageTitle}>Search</h1>
+        <p style={pageSubtitle}>Loading search services...</p>
+      </div>
+    );
+  }
+
+  if (!searchService) {
+    return <SearchPageBasic />;
+  }
+
+  return (
+    <div style={pageStyle}>
+      <UnifiedSearch searchService={searchService} />
+    </div>
+  );
+}
+
+function SearchPageBasic() {
+  const [query, setQuery] = useState('');
   return (
     <div style={pageStyle}>
       <h1 style={pageTitle}>Search</h1>
@@ -157,9 +209,16 @@ function SearchPage() {
           type="text"
           placeholder="What do you want to listen to?"
           style={searchInputStyle}
-          readOnly
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
         />
       </div>
+      {query.trim() && (
+        <div style={{ marginTop: 24, padding: 32, textAlign: 'center', color: '#6a6a6a' }}>
+          <p style={{ fontSize: 14 }}>No search services configured.</p>
+          <p style={{ fontSize: 12, marginTop: 8 }}>Add API keys in your .env file and connect services to enable search.</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -316,15 +375,205 @@ function SpotifyPage() {
 }
 
 function YouTubePage() {
+  const { status, loading, refresh } = useSourceStatus();
+  const connected = status.youtube;
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ytService, setYtService] = useState<YouTubeService | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{
+    id: string; title: string; artist: string; thumbnail: string | null; videoId: string; duration: number;
+  }>>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Initialize YouTubeService when connected
+  useEffect(() => {
+    if (!connected) { setYtService(null); return; }
+    const api = (window as any).electronAPI;
+    if (!api?.getConfig) return;
+    api.getConfig().then((config: Record<string, string>) => {
+      if (config.YOUTUBE_API_KEY) {
+        setYtService(new YouTubeService({
+          apiKey: config.YOUTUBE_API_KEY,
+          playbackMode: (config.YOUTUBE_PLAYBACK_MODE as 'iframe' | 'extract') || 'iframe',
+        }));
+      }
+    }).catch(() => {});
+  }, [connected]);
+
+  const handleConnect = useCallback(async () => {
+    const api = (window as any).electronAPI;
+    if (!api?.auth) return;
+    setConnecting(true);
+    setError(null);
+    try {
+      const result = await api.auth.youtubeLogin();
+      if (result.success) refresh();
+      else setError(result.error || 'Connection failed');
+    } catch (err: any) {
+      setError(err.message || 'Connection failed');
+    } finally {
+      setConnecting(false);
+    }
+  }, [refresh]);
+
+  const handleDisconnect = useCallback(async () => {
+    await disconnectSource('youtube');
+    refresh();
+  }, [refresh]);
+
+  // Debounced YouTube search
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!value.trim() || !ytService) { setSearchResults([]); setSearchError(null); return; }
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      setSearchError(null);
+      try {
+        const results = await ytService.search(value, 'video', 20);
+        setSearchResults(results);
+      } catch (err: any) {
+        setSearchError(err.message || 'Search failed');
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 400);
+  }, [ytService]);
+
+  const handleOpenVideo = useCallback((videoId: string) => {
+    const api = (window as any).electronAPI;
+    if (api?.openExternal) api.openExternal(`https://www.youtube.com/watch?v=${videoId}`);
+  }, []);
+
+  const formatDuration = (seconds: number): string => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <ServicePage
-      name="YouTube"
-      icon={'\u25B6\uFE0F'}
-      color="#ff0000"
-      source="youtube"
-      description="Watch videos and listen to music from YouTube."
-      connectText="Connect YouTube"
-    />
+    <div style={pageStyle}>
+      <h1 style={pageTitle}>
+        <span style={{ color: '#ff0000' }}>{'\u25B6\uFE0F'}</span> YouTube
+      </h1>
+      <p style={pageSubtitle}>Watch videos and listen to music from YouTube.</p>
+
+      {/* Connection status banner */}
+      <div style={{
+        ...statusBanner,
+        borderColor: connected ? '#ff000040' : '#282828',
+        backgroundColor: connected ? '#ff000010' : '#181818',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 10, height: 10, borderRadius: '50%',
+            backgroundColor: (loading || connecting) ? '#f59e0b' : connected ? '#ff0000' : '#4a4a4a',
+            boxShadow: connected ? '0 0 8px #ff000060' : 'none',
+          }} />
+          <span style={{ fontSize: 14, fontWeight: 500, color: '#ffffff' }}>
+            {connecting ? 'Connecting...' : loading ? 'Checking...' : connected ? 'Connected' : 'Not connected'}
+          </span>
+        </div>
+        {connected ? (
+          <button onClick={handleDisconnect} style={{ ...connectBtn, backgroundColor: '#4a4a4a', fontSize: 12, padding: '6px 16px' }}>
+            Disconnect
+          </button>
+        ) : (
+          <button onClick={handleConnect} disabled={connecting}
+            style={{ ...connectBtn, backgroundColor: connecting ? '#666' : '#ff0000', fontSize: 12, padding: '6px 16px', opacity: connecting ? 0.7 : 1 }}>
+            {connecting ? 'Connecting...' : 'Connect YouTube'}
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div style={{ padding: '10px 14px', borderRadius: 6, backgroundColor: '#3a1a1a', border: '1px solid #ff4444', marginBottom: 16, fontSize: 13, color: '#ff8888' }}>
+          {error}
+        </div>
+      )}
+
+      {/* Search and browse when connected */}
+      {connected && ytService && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ maxWidth: 600, marginBottom: 24 }}>
+            <input
+              type="text"
+              placeholder="Search YouTube videos..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              style={searchInputStyle}
+            />
+          </div>
+
+          {searching && <p style={{ fontSize: 13, color: '#b3b3b3', marginBottom: 16 }}>Searching...</p>}
+          {searchError && (
+            <div style={{ padding: '10px 14px', borderRadius: 6, backgroundColor: '#3a1a1a', border: '1px solid #ff4444', marginBottom: 16, fontSize: 13, color: '#ff8888' }}>
+              {searchError}
+            </div>
+          )}
+
+          {searchResults.length > 0 && (
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: '#ffffff', marginBottom: 12 }}>Results</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {searchResults.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleOpenVideo(item.videoId)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '8px 12px', borderRadius: 8,
+                      border: '1px solid #282828', backgroundColor: '#181818',
+                      cursor: 'pointer', textAlign: 'left', width: '100%',
+                    }}
+                  >
+                    {item.thumbnail && (
+                      <img src={item.thumbnail} alt="" style={{ width: 120, height: 68, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {item.title}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#6a6a6a', marginTop: 2 }}>{item.artist}</div>
+                    </div>
+                    {item.duration > 0 && (
+                      <span style={{ fontSize: 11, color: '#6a6a6a', flexShrink: 0 }}>{formatDuration(item.duration)}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!searchQuery.trim() && searchResults.length === 0 && (
+            <div style={{ ...widgetCardInline, borderColor: '#ff000030' }}>
+              <p style={{ fontSize: 14, color: '#b3b3b3' }}>YouTube is connected. Search for videos above.</p>
+            </div>
+          )}
+
+          {searchQuery.trim() && !searching && searchResults.length === 0 && !searchError && (
+            <div style={{ textAlign: 'center', padding: 32, color: '#6a6a6a' }}>
+              <p style={{ fontSize: 14 }}>No results found for &quot;{searchQuery}&quot;</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!connected && !connecting && (
+        <div style={servicePrompt}>
+          <span style={{ fontSize: 48 }}>{'\u25B6\uFE0F'}</span>
+          <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>Connect to YouTube</h3>
+          <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>
+            Set your YOUTUBE_API_KEY in .env and click Connect to validate.
+          </p>
+          <button onClick={handleConnect} style={{ ...connectBtn, backgroundColor: '#ff0000' }}>Connect YouTube</button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -366,9 +615,22 @@ function NewsPage() {
 
 function SettingsPage() {
   const { status, loading } = useSourceStatus();
+  const [config, setConfig] = useState<Record<string, string> | null>(null);
+
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (api?.getConfig) {
+      api.getConfig().then((cfg: Record<string, string>) => setConfig(cfg)).catch(() => {});
+    }
+  }, []);
 
   const statusLabel = (connected: boolean) =>
     loading ? 'Checking...' : connected ? 'Connected' : 'Not connected';
+
+  const weatherConfigured = config ? !!config.WEATHER_API_KEY : false;
+  const newsConfigured = config ? !!config.NEWS_API_KEY : false;
+  const widgetLabel = (configured: boolean) =>
+    config === null ? 'Checking...' : configured ? 'Configured' : 'Not configured';
 
   return (
     <div style={pageStyle}>
@@ -380,8 +642,8 @@ function SettingsPage() {
           <SettingsRow label="Jellyfin" value={statusLabel(status.jellyfin)} action={status.jellyfin ? 'Disconnect' : 'Connect'} statusColor={status.jellyfin ? '#aa5cc3' : undefined} />
         </SettingsSection>
         <SettingsSection title="Dashboard Widgets">
-          <SettingsRow label="Weather API Key" value="Not configured" action="Configure" />
-          <SettingsRow label="News API Key" value="Not configured" action="Configure" />
+          <SettingsRow label="Weather API Key" value={widgetLabel(weatherConfigured)} statusColor={weatherConfigured ? '#4fc3f7' : undefined} />
+          <SettingsRow label="News API Key" value={widgetLabel(newsConfigured)} statusColor={newsConfigured ? '#ff9800' : undefined} />
         </SettingsSection>
         <SettingsSection title="Appearance">
           <SettingsRow label="Theme" value="Dark" />
