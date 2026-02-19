@@ -22,7 +22,7 @@ import {
 } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { HomePage } from './components/home/HomePage';
-import { useSourceStatus } from './hooks/useSourceStatus';
+import { useSourceStatus, disconnectSource } from './hooks/useSourceStatus';
 
 // ---------------------------------------------------------------------------
 // Providers & Stores
@@ -224,7 +224,6 @@ function ServicePage({
   }, [source, refresh]);
 
   const handleDisconnect = useCallback(async () => {
-    const { disconnectSource } = await import('./hooks/useSourceStatus');
     await disconnectSource(source);
     refresh();
   }, [source, refresh]);

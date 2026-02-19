@@ -449,7 +449,12 @@ function setupIPC(): void {
             return;
           }
 
-          const data = await res.json();
+          const data = (await res.json()) as {
+            access_token: string;
+            refresh_token: string;
+            expires_in: number;
+            scope: string;
+          };
           getSpotifyStore().set('spotifyTokens', {
             accessToken: data.access_token,
             refreshToken: data.refresh_token,
@@ -504,7 +509,12 @@ function setupIPC(): void {
             return;
           }
 
-          const data = await res.json();
+          const data = (await res.json()) as {
+            access_token: string;
+            refresh_token: string;
+            expires_in: number;
+            scope: string;
+          };
           getSpotifyStore().set('spotifyTokens', {
             accessToken: data.access_token,
             refreshToken: data.refresh_token,
@@ -585,7 +595,11 @@ function setupIPC(): void {
         return { success: false, error: `Jellyfin auth failed (${res.status}): ${text}` };
       }
 
-      const data = await res.json();
+      const data = (await res.json()) as {
+        AccessToken: string;
+        User: { Id: string };
+        ServerId: string;
+      };
       getJellyfinStore().set('jellyfinSession', {
         accessToken: data.AccessToken,
         userId: data.User.Id,
