@@ -50,6 +50,13 @@ cp .env.example .env
 
 Open `.env` in your editor and fill in the values. See [API Setup](#api-setup) for instructions on obtaining each key.
 
+> **Packaged app note:** If you are running a built executable (e.g. from `out\win-arm64-unpacked\`) rather than `npm run dev`, place the `.env` file in the **same folder as the executable**. For example:
+> ```
+> out\win-arm64-unpacked\.env        ← place it here, next to Media Hub.exe
+> out\win-arm64-unpacked\Media Hub.exe
+> ```
+> The app searches the executable's directory first when running as a packaged build.
+
 ### 4. Run in development mode
 
 ```bash
@@ -89,7 +96,7 @@ Spotify is used for music streaming via the Web Playback SDK. Authentication use
 2. Click **Create App**
 3. Fill in:
    - **App name**: anything (e.g. "Media Hub")
-   - **Redirect URI**: `http://localhost:8888/callback`
+   - **Redirect URI**: `http://127.0.0.1:8888/callback` (use the IP address, not `localhost` — Spotify enforces this distinction)
    - **APIs used**: check **Web Playback SDK** and **Web API**
 4. Click **Create**
 5. On the app's overview page, copy the **Client ID**
@@ -100,13 +107,13 @@ Add to `.env`:
 
 ```
 SPOTIFY_CLIENT_ID=your_client_id_here
-SPOTIFY_REDIRECT_URI=http://localhost:8888/callback
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:8888/callback
 ```
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `SPOTIFY_CLIENT_ID` | Yes | Your Spotify app's Client ID |
-| `SPOTIFY_REDIRECT_URI` | No | OAuth callback URL (default: `http://localhost:8888/callback`) |
+| `SPOTIFY_REDIRECT_URI` | No | OAuth callback URL (default: `http://127.0.0.1:8888/callback`) — must match exactly what is set in the Spotify Developer Dashboard |
 
 ---
 
@@ -266,7 +273,6 @@ media_center/
 │       │   └── news/          #   NewsAPI service
 │       ├── stores/            #   Zustand state management
 │       ├── hooks/             #   Custom React hooks
-│       ├── config/            #   Environment config loaders
 │       ├── types/             #   TypeScript type definitions
 │       ├── utils/             #   Utility functions
 │       └── styles/            #   Global CSS, Tailwind base

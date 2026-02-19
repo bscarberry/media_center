@@ -24,6 +24,7 @@ import Store from 'electron-store';
 function loadDotEnv(): void {
   // Check multiple locations where .env might live
   const candidates = [
+    path.join(path.dirname(app.getPath('exe')), '.env'),        // directory containing the executable (packaged)
     path.join(process.cwd(), '.env'),                           // current working directory
     path.join(app.getAppPath(), '.env'),                        // app path (dev mode)
     path.join(path.dirname(app.getAppPath()), '.env'),          // parent of app.asar (packaged)
@@ -331,7 +332,7 @@ function setupIPC(): void {
   ipcMain.handle('config:get-env', () => {
     return {
       SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID || '',
-      SPOTIFY_REDIRECT_URI: process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:8888/callback',
+      SPOTIFY_REDIRECT_URI: process.env.SPOTIFY_REDIRECT_URI || 'http://127.0.0.1:8888/callback',
       YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || '',
       YOUTUBE_PLAYBACK_MODE: process.env.YOUTUBE_PLAYBACK_MODE || 'iframe',
       YOUTUBE_OAUTH_CLIENT_ID: process.env.YOUTUBE_OAUTH_CLIENT_ID || '',
@@ -386,7 +387,7 @@ function setupIPC(): void {
 
   ipcMain.handle('auth:spotify-login', async () => {
     const clientId = process.env.SPOTIFY_CLIENT_ID;
-    const redirectUri = process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:8888/callback';
+    const redirectUri = process.env.SPOTIFY_REDIRECT_URI || 'http://127.0.0.1:8888/callback';
 
     if (!clientId) {
       return { success: false, error: 'SPOTIFY_CLIENT_ID not set in .env' };
