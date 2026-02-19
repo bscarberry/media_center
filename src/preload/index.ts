@@ -32,11 +32,17 @@ const electronAPI = {
   // OAuth helpers
   startOAuthServer: (port: number) => ipcRenderer.invoke('oauth:start-server', port),
 
-  // Auth status
+  // Auth status and login flows
   auth: {
     getStatus: () => ipcRenderer.invoke('auth:get-status') as Promise<{ spotify: boolean; youtube: boolean; jellyfin: boolean }>,
     clearTokens: (service: string) => ipcRenderer.invoke('auth:clear-tokens', service) as Promise<boolean>,
+    spotifyLogin: () => ipcRenderer.invoke('auth:spotify-login') as Promise<{ success: boolean; error?: string }>,
+    youtubeLogin: () => ipcRenderer.invoke('auth:youtube-login') as Promise<{ success: boolean; error?: string }>,
+    jellyfinLogin: () => ipcRenderer.invoke('auth:jellyfin-login') as Promise<{ success: boolean; error?: string }>,
   },
+
+  // Environment config (from main process .env)
+  getConfig: () => ipcRenderer.invoke('config:get-env') as Promise<Record<string, string>>,
 
   // Events from main process (tray controls, etc.)
   on: (channel: string, callback: (...args: unknown[]) => void) => {

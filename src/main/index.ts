@@ -13,7 +13,44 @@ import {
   type Rectangle,
 } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
+import { createHash, randomBytes } from 'crypto';
 import Store from 'electron-store';
+
+// ---------------------------------------------------------------------------
+// Load .env file (before anything else needs env vars)
+// ---------------------------------------------------------------------------
+
+function loadDotEnv(): void {
+  const envPath = path.join(app.getAppPath(), '.env');
+  try {
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf-8');
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx === -1) continue;
+        const key = trimmed.slice(0, eqIdx).trim();
+        let val = trimmed.slice(eqIdx + 1).trim();
+        // Strip surrounding quotes
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+          val = val.slice(1, -1);
+        }
+        if (!process.env[key]) {
+          process.env[key] = val;
+        }
+      }
+      console.log('[main] Loaded .env from', envPath);
+    } else {
+      console.log('[main] No .env file found at', envPath);
+    }
+  } catch (err) {
+    console.warn('[main] Failed to load .env:', err);
+  }
+}
+
+loadDotEnv();
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -35,6 +72,47 @@ const store = new Store<{
   name: 'window-state',
   defaults: {},
 });
+
+// ---------------------------------------------------------------------------
+// Auth token stores (lazy-created singletons)
+// ---------------------------------------------------------------------------
+
+let spotifyTokenStore: Store<{ spotifyTokens: any }> | null = null;
+let youtubeTokenStore: Store<{ youtubeTokens: any }> | null = null;
+let jellyfinSessionStore: Store<{ jellyfinSession: any }> | null = null;
+
+function getSpotifyStore() {
+  if (!spotifyTokenStore) {
+    spotifyTokenStore = new Store({
+      name: 'spotify-tokens',
+      encryptionKey: 'brandons-media-hub-v1',
+      defaults: { spotifyTokens: null },
+    });
+  }
+  return spotifyTokenStore;
+}
+
+function getYouTubeStore() {
+  if (!youtubeTokenStore) {
+    youtubeTokenStore = new Store({
+      name: 'youtube-tokens',
+      encryptionKey: 'brandons-media-hub-yt-v1',
+      defaults: { youtubeTokens: null },
+    });
+  }
+  return youtubeTokenStore;
+}
+
+function getJellyfinStore() {
+  if (!jellyfinSessionStore) {
+    jellyfinSessionStore = new Store({
+      name: 'jellyfin-session',
+      encryptionKey: 'brandons-media-hub-jf-v1',
+      defaults: { jellyfinSession: null },
+    });
+  }
+  return jellyfinSessionStore;
+}
 
 // ---------------------------------------------------------------------------
 // Globals
@@ -161,6 +239,26 @@ function createTray(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Spotify PKCE helpers (run in main process since renderer has no Node)
+// ---------------------------------------------------------------------------
+
+function generatePKCE() {
+  const verifier = randomBytes(32).toString('base64url').slice(0, 128);
+  const challenge = createHash('sha256').update(verifier).digest('base64url');
+  return { verifier, challenge };
+}
+
+const SPOTIFY_SCOPES = [
+  'streaming', 'user-read-email', 'user-read-private',
+  'user-read-playback-state', 'user-modify-playback-state',
+  'user-library-read', 'user-library-modify',
+  'playlist-read-private', 'playlist-read-collaborative',
+  'playlist-modify-public', 'playlist-modify-private',
+];
+
+let spotifyAuthPending: { verifier: string; state: string } | null = null;
+
+// ---------------------------------------------------------------------------
 // IPC Handlers
 // ---------------------------------------------------------------------------
 
@@ -205,9 +303,25 @@ function setupIPC(): void {
 
   // OAuth callback server management
   ipcMain.handle('oauth:start-server', async (_event, port: number) => {
-    // Renderer will manage Express server – this is a placeholder
-    // for future migration to main process
     return { port };
+  });
+
+  // -------------------------------------------------------------------------
+  // Environment config – expose env vars to renderer safely
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('config:get-env', () => {
+    return {
+      SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID || '',
+      SPOTIFY_REDIRECT_URI: process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:8888/callback',
+      YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || '',
+      YOUTUBE_PLAYBACK_MODE: process.env.YOUTUBE_PLAYBACK_MODE || 'iframe',
+      YOUTUBE_OAUTH_CLIENT_ID: process.env.YOUTUBE_OAUTH_CLIENT_ID || '',
+      JELLYFIN_SERVER_URL: process.env.JELLYFIN_SERVER_URL || '',
+      JELLYFIN_USERNAME: process.env.JELLYFIN_USERNAME || '',
+      WEATHER_API_KEY: process.env.WEATHER_API_KEY || '',
+      NEWS_API_KEY: process.env.NEWS_API_KEY || '',
+    };
   });
 
   // -------------------------------------------------------------------------
@@ -218,32 +332,17 @@ function setupIPC(): void {
     const result = { spotify: false, youtube: false, jellyfin: false };
 
     try {
-      const spotifyStore = new Store<{ spotifyTokens: unknown }>({
-        name: 'spotify-tokens',
-        encryptionKey: 'brandons-media-hub-v1',
-        defaults: { spotifyTokens: null },
-      });
-      const tokens = spotifyStore.get('spotifyTokens');
+      const tokens = getSpotifyStore().get('spotifyTokens');
       result.spotify = tokens !== null && tokens !== undefined;
     } catch { /* store not created yet */ }
 
     try {
-      const ytStore = new Store<{ youtubeTokens: unknown }>({
-        name: 'youtube-tokens',
-        encryptionKey: 'brandons-media-hub-yt-v1',
-        defaults: { youtubeTokens: null },
-      });
-      const tokens = ytStore.get('youtubeTokens');
+      const tokens = getYouTubeStore().get('youtubeTokens');
       result.youtube = tokens !== null && tokens !== undefined;
     } catch { /* store not created yet */ }
 
     try {
-      const jfStore = new Store<{ jellyfinSession: unknown }>({
-        name: 'jellyfin-session',
-        encryptionKey: 'brandons-media-hub-jf-v1',
-        defaults: { jellyfinSession: null },
-      });
-      const session = jfStore.get('jellyfinSession');
+      const session = getJellyfinStore().get('jellyfinSession');
       result.jellyfin = session !== null && session !== undefined;
     } catch { /* store not created yet */ }
 
@@ -253,29 +352,281 @@ function setupIPC(): void {
   ipcMain.handle('auth:clear-tokens', (_event, service: string) => {
     try {
       if (service === 'spotify') {
-        const s = new Store<{ spotifyTokens: unknown }>({
-          name: 'spotify-tokens',
-          encryptionKey: 'brandons-media-hub-v1',
-          defaults: { spotifyTokens: null },
-        });
-        s.set('spotifyTokens', null);
+        getSpotifyStore().set('spotifyTokens', null);
       } else if (service === 'youtube') {
-        const s = new Store<{ youtubeTokens: unknown }>({
-          name: 'youtube-tokens',
-          encryptionKey: 'brandons-media-hub-yt-v1',
-          defaults: { youtubeTokens: null },
-        });
-        s.set('youtubeTokens', null);
+        getYouTubeStore().set('youtubeTokens', null);
       } else if (service === 'jellyfin') {
-        const s = new Store<{ jellyfinSession: unknown }>({
-          name: 'jellyfin-session',
-          encryptionKey: 'brandons-media-hub-jf-v1',
-          defaults: { jellyfinSession: null },
-        });
-        s.set('jellyfinSession', null);
+        getJellyfinStore().set('jellyfinSession', null);
       }
     } catch { /* ignore */ }
     return true;
+  });
+
+  // -------------------------------------------------------------------------
+  // Spotify OAuth PKCE – main process handles the full flow
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('auth:spotify-login', async () => {
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    const redirectUri = process.env.SPOTIFY_REDIRECT_URI || 'http://localhost:8888/callback';
+
+    if (!clientId) {
+      return { success: false, error: 'SPOTIFY_CLIENT_ID not set in .env' };
+    }
+
+    const { verifier, challenge } = generatePKCE();
+    const state = randomBytes(16).toString('hex');
+    spotifyAuthPending = { verifier, state };
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      response_type: 'code',
+      redirect_uri: redirectUri,
+      scope: SPOTIFY_SCOPES.join(' '),
+      code_challenge_method: 'S256',
+      code_challenge: challenge,
+      state,
+    });
+
+    const authUrl = `https://accounts.spotify.com/authorize?${params.toString()}`;
+
+    // Open a BrowserWindow for the OAuth flow (keeps user in-app)
+    return new Promise((resolve) => {
+      const authWin = new BrowserWindow({
+        width: 500,
+        height: 700,
+        parent: mainWindow ?? undefined,
+        modal: true,
+        show: true,
+        webPreferences: { nodeIntegration: false, contextIsolation: true },
+      });
+
+      authWin.loadURL(authUrl);
+
+      // Watch for the redirect with the auth code
+      authWin.webContents.on('will-redirect', async (_event, url) => {
+        if (!url.startsWith(redirectUri)) return;
+
+        const parsed = new URL(url);
+        const code = parsed.searchParams.get('code');
+        const returnedState = parsed.searchParams.get('state');
+        const error = parsed.searchParams.get('error');
+
+        authWin.close();
+
+        if (error) {
+          spotifyAuthPending = null;
+          resolve({ success: false, error: `Spotify denied: ${error}` });
+          return;
+        }
+
+        if (!code || returnedState !== spotifyAuthPending?.state) {
+          spotifyAuthPending = null;
+          resolve({ success: false, error: 'Invalid OAuth response' });
+          return;
+        }
+
+        // Exchange code for tokens
+        try {
+          const body = new URLSearchParams({
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: redirectUri,
+            client_id: clientId,
+            code_verifier: spotifyAuthPending.verifier,
+          });
+
+          const res = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+          });
+
+          if (!res.ok) {
+            const errBody = await res.text();
+            spotifyAuthPending = null;
+            resolve({ success: false, error: `Token exchange failed: ${errBody}` });
+            return;
+          }
+
+          const data = await res.json();
+          getSpotifyStore().set('spotifyTokens', {
+            accessToken: data.access_token,
+            refreshToken: data.refresh_token,
+            expiresAt: Date.now() + data.expires_in * 1000,
+            scope: data.scope,
+          });
+
+          spotifyAuthPending = null;
+          resolve({ success: true });
+        } catch (err: any) {
+          spotifyAuthPending = null;
+          resolve({ success: false, error: err.message });
+        }
+      });
+
+      // Also handle URL changes via will-navigate
+      authWin.webContents.on('will-navigate', async (_event, url) => {
+        if (!url.startsWith(redirectUri)) return;
+
+        const parsed = new URL(url);
+        const code = parsed.searchParams.get('code');
+        const returnedState = parsed.searchParams.get('state');
+        const error = parsed.searchParams.get('error');
+
+        authWin.close();
+
+        if (error || !code || returnedState !== spotifyAuthPending?.state) {
+          spotifyAuthPending = null;
+          resolve({ success: false, error: error || 'Invalid OAuth response' });
+          return;
+        }
+
+        try {
+          const body = new URLSearchParams({
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: redirectUri,
+            client_id: clientId,
+            code_verifier: spotifyAuthPending!.verifier,
+          });
+
+          const res = await fetch('https://accounts.spotify.com/api/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString(),
+          });
+
+          if (!res.ok) {
+            const errBody = await res.text();
+            spotifyAuthPending = null;
+            resolve({ success: false, error: `Token exchange failed: ${errBody}` });
+            return;
+          }
+
+          const data = await res.json();
+          getSpotifyStore().set('spotifyTokens', {
+            accessToken: data.access_token,
+            refreshToken: data.refresh_token,
+            expiresAt: Date.now() + data.expires_in * 1000,
+            scope: data.scope,
+          });
+
+          spotifyAuthPending = null;
+          resolve({ success: true });
+        } catch (err: any) {
+          spotifyAuthPending = null;
+          resolve({ success: false, error: err.message });
+        }
+      });
+
+      authWin.on('closed', () => {
+        if (spotifyAuthPending) {
+          spotifyAuthPending = null;
+          resolve({ success: false, error: 'Auth window closed' });
+        }
+      });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Jellyfin auth – authenticate with username/password from .env
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('auth:jellyfin-login', async () => {
+    const serverUrl = process.env.JELLYFIN_SERVER_URL;
+    if (!serverUrl) {
+      return { success: false, error: 'JELLYFIN_SERVER_URL not set in .env' };
+    }
+
+    const apiKey = process.env.JELLYFIN_API_KEY;
+    const username = process.env.JELLYFIN_USERNAME;
+    const password = process.env.JELLYFIN_PASSWORD;
+
+    // API key auth
+    if (apiKey) {
+      try {
+        const res = await fetch(`${serverUrl}/System/Ping`, {
+          headers: { 'X-Emby-Token': apiKey },
+        });
+        if (res.ok) {
+          getJellyfinStore().set('jellyfinSession', {
+            accessToken: apiKey,
+            userId: 'apikey-user',
+            serverId: serverUrl,
+          });
+          return { success: true };
+        }
+        return { success: false, error: `Jellyfin ping failed: ${res.status}` };
+      } catch (err: any) {
+        return { success: false, error: `Cannot reach Jellyfin: ${err.message}` };
+      }
+    }
+
+    // Username/password auth
+    if (!username || !password) {
+      return { success: false, error: 'Set JELLYFIN_USERNAME + JELLYFIN_PASSWORD or JELLYFIN_API_KEY in .env' };
+    }
+
+    try {
+      const authHeader =
+        `MediaBrowser Client="Brandon's Media Hub", Device="Desktop", DeviceId="brandons-media-hub-electron", Version="1.0.0"`;
+      const res = await fetch(`${serverUrl}/Users/AuthenticateByName`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Emby-Authorization': authHeader,
+        },
+        body: JSON.stringify({ Username: username, Pw: password }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        return { success: false, error: `Jellyfin auth failed (${res.status}): ${text}` };
+      }
+
+      const data = await res.json();
+      getJellyfinStore().set('jellyfinSession', {
+        accessToken: data.AccessToken,
+        userId: data.User.Id,
+        serverId: data.ServerId,
+      });
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: `Cannot reach Jellyfin: ${err.message}` };
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // YouTube – validate API key works
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('auth:youtube-login', async () => {
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) {
+      return { success: false, error: 'YOUTUBE_API_KEY not set in .env' };
+    }
+
+    try {
+      // Test the API key with a simple request
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=id&chart=mostPopular&maxResults=1&key=${apiKey}`,
+      );
+
+      if (!res.ok) {
+        const text = await res.text();
+        return { success: false, error: `YouTube API key invalid (${res.status}): ${text}` };
+      }
+
+      // Store the key as "tokens" so auth:get-status sees it
+      getYouTubeStore().set('youtubeTokens', {
+        apiKey,
+        validatedAt: Date.now(),
+      });
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: `YouTube API check failed: ${err.message}` };
+    }
   });
 }
 

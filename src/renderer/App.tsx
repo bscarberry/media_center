@@ -4,8 +4,10 @@
 
 import React, {
   useState,
+  useEffect,
   useCallback,
   useMemo,
+  useRef,
   type CSSProperties,
   type ReactNode,
 } from 'react';
@@ -189,6 +191,37 @@ function ServicePage({
 }) {
   const { status, loading, refresh } = useSourceStatus();
   const connected = status[source];
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleConnect = useCallback(async () => {
+    const api = (window as any).electronAPI;
+    if (!api?.auth) return;
+
+    setConnecting(true);
+    setError(null);
+
+    try {
+      let result: { success: boolean; error?: string };
+      if (source === 'spotify') {
+        result = await api.auth.spotifyLogin();
+      } else if (source === 'youtube') {
+        result = await api.auth.youtubeLogin();
+      } else {
+        result = await api.auth.jellyfinLogin();
+      }
+
+      if (result.success) {
+        refresh();
+      } else {
+        setError(result.error || 'Connection failed');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Connection failed');
+    } finally {
+      setConnecting(false);
+    }
+  }, [source, refresh]);
 
   const handleDisconnect = useCallback(async () => {
     const { disconnectSource } = await import('./hooks/useSourceStatus');
@@ -214,11 +247,11 @@ function ServicePage({
             width: 10,
             height: 10,
             borderRadius: '50%',
-            backgroundColor: loading ? '#f59e0b' : connected ? color : '#4a4a4a',
+            backgroundColor: (loading || connecting) ? '#f59e0b' : connected ? color : '#4a4a4a',
             boxShadow: connected ? `0 0 8px ${color}60` : 'none',
           }} />
           <span style={{ fontSize: 14, fontWeight: 500, color: '#ffffff' }}>
-            {loading ? 'Checking...' : connected ? 'Connected' : 'Not connected'}
+            {connecting ? 'Connecting...' : loading ? 'Checking...' : connected ? 'Connected' : 'Not connected'}
           </span>
         </div>
         {connected ? (
@@ -226,23 +259,34 @@ function ServicePage({
             Disconnect
           </button>
         ) : (
-          <button style={{ ...connectBtn, backgroundColor: color, fontSize: 12, padding: '6px 16px' }}>
-            {connectText}
+          <button
+            onClick={handleConnect}
+            disabled={connecting}
+            style={{ ...connectBtn, backgroundColor: connecting ? '#666' : color, fontSize: 12, padding: '6px 16px', opacity: connecting ? 0.7 : 1 }}
+          >
+            {connecting ? 'Connecting...' : connectText}
           </button>
         )}
       </div>
 
+      {/* Error message */}
+      {error && (
+        <div style={{ padding: '10px 14px', borderRadius: 6, backgroundColor: '#3a1a1a', border: '1px solid #ff4444', marginBottom: 16, fontSize: 13, color: '#ff8888' }}>
+          {error}
+        </div>
+      )}
+
       {/* Content area */}
-      {!connected && (
+      {!connected && !connecting && (
         <div style={servicePrompt}>
           <span style={{ fontSize: 48 }}>{icon}</span>
           <h3 style={{ fontSize: 18, fontWeight: 600, color: '#ffffff', margin: '12px 0 8px' }}>Connect to {name}</h3>
           <p style={{ fontSize: 13, color: '#6a6a6a', marginBottom: 16 }}>
             {source === 'spotify' && 'Set your SPOTIFY_CLIENT_ID in .env and click Connect to sign in via OAuth.'}
-            {source === 'youtube' && 'Set your YOUTUBE_API_KEY and OAuth credentials in .env and click Connect.'}
+            {source === 'youtube' && 'Set your YOUTUBE_API_KEY in .env and click Connect to validate.'}
             {source === 'jellyfin' && 'Set your JELLYFIN_SERVER_URL and credentials in .env and click Connect.'}
           </p>
-          <button style={{ ...connectBtn, backgroundColor: color }}>{connectText}</button>
+          <button onClick={handleConnect} style={{ ...connectBtn, backgroundColor: color }}>{connectText}</button>
         </div>
       )}
 
@@ -547,6 +591,28 @@ export function App() {
 }
 
 function AppLayout() {
+  // Auto-connect services on startup
+  const didAutoConnect = useRef(false);
+  useEffect(() => {
+    if (didAutoConnect.current) return;
+    didAutoConnect.current = true;
+
+    const api = (window as any).electronAPI;
+    if (!api?.auth) return;
+
+    // Auto-connect non-interactive services (YouTube API key + Jellyfin)
+    // Spotify requires interactive OAuth so it's not auto-connected
+    (async () => {
+      try {
+        const status = await api.auth.getStatus();
+        if (!status.youtube) api.auth.youtubeLogin().catch(() => {});
+        if (!status.jellyfin) api.auth.jellyfinLogin().catch(() => {});
+      } catch {
+        // Electron API not available
+      }
+    })();
+  }, []);
+
   return (
     <div style={appContainer}>
       {/* Sidebar */}
