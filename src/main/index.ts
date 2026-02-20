@@ -169,8 +169,17 @@ function createWindow(): void {
   });
 
   // Override user-agent to standard Chrome so YouTube iframes work (Electron UA is blocked)
-  mainWindow.webContents.session.setUserAgent(
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  const chromeUA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  mainWindow.webContents.session.setUserAgent(chromeUA);
+
+  // Also intercept request headers for YouTube domains — iframes may fire before
+  // the session UA propagates, so this guarantees Chrome UA on every YouTube request.
+  mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
+    { urls: ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://*.ytimg.com/*', '*://*.googlevideo.com/*'] },
+    (details, callback) => {
+      details.requestHeaders['User-Agent'] = chromeUA;
+      callback({ requestHeaders: details.requestHeaders });
+    },
   );
 
   // Gracefully show window when ready
@@ -641,6 +650,61 @@ function setupIPC(): void {
   });
 
   // -------------------------------------------------------------------------
+  // Spotify – fetch library content (playlists + top tracks) for the content page
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('spotify:get-content', async () => {
+    const tokens = getSpotifyStore().get('spotifyTokens') as {
+      accessToken: string; refreshToken: string; expiresAt: number;
+    } | null;
+    if (!tokens?.accessToken) throw new Error('Not authenticated with Spotify');
+    const headers = { Authorization: `Bearer ${tokens.accessToken}` };
+    const [playlistsRes, topTracksRes, profileRes] = await Promise.all([
+      fetch('https://api.spotify.com/v1/me/playlists?limit=20', { headers }),
+      fetch('https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=10', { headers }),
+      fetch('https://api.spotify.com/v1/me', { headers }),
+    ]);
+    const playlists = playlistsRes.ok ? ((await playlistsRes.json()) as any).items ?? [] : [];
+    const topTracks = topTracksRes.ok ? ((await topTracksRes.json()) as any).items ?? [] : [];
+    const profile = profileRes.ok ? (await profileRes.json()) as any : null;
+    return { playlists, topTracks, profile };
+  });
+
+  // -------------------------------------------------------------------------
+  // Jellyfin – fetch library content (recently added + resume) for the content page
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('jellyfin:get-content', async () => {
+    const session = getJellyfinStore().get('jellyfinSession') as {
+      accessToken: string; userId: string; serverId: string;
+    } | null;
+    if (!session?.accessToken) throw new Error('Not authenticated with Jellyfin');
+    const base = (process.env.JELLYFIN_SERVER_URL || session.serverId).replace(/\/$/, '');
+    const headers = { 'X-Emby-Token': session.accessToken };
+    const [recentRes, resumeRes] = await Promise.all([
+      fetch(
+        `${base}/Users/${session.userId}/Items/Latest?Limit=20&ImageTypeLimit=1` +
+        `&EnableImageTypes=Primary&IncludeItemTypes=Movie,Series,Episode`,
+        { headers },
+      ),
+      fetch(
+        `${base}/Users/${session.userId}/Items?Recursive=true&SortBy=DatePlayed` +
+        `&SortOrder=Descending&Filters=IsResumable&Limit=10` +
+        `&ImageTypeLimit=1&EnableImageTypes=Primary`,
+        { headers },
+      ),
+    ]);
+    const recentItems = recentRes.ok ? (await recentRes.json()) as any[] : [];
+    const resumeData = resumeRes.ok ? (await resumeRes.json()) as any : { Items: [] };
+    return {
+      recentItems: Array.isArray(recentItems) ? recentItems : [],
+      resumeItems: resumeData.Items ?? [],
+      serverUrl: base,
+      accessToken: session.accessToken,
+    };
+  });
+
+  // -------------------------------------------------------------------------
   // YouTube – validate API key works
   // -------------------------------------------------------------------------
 
@@ -707,7 +771,7 @@ function setupIPC(): void {
       backgroundColor: '#000000',
       webPreferences: { nodeIntegration: false, contextIsolation: true },
     });
-    win.loadURL(`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`);
+    win.loadURL(`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`);
     win.setMenu(null);
   });
 
