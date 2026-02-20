@@ -715,7 +715,7 @@ function setupIPC(): void {
   // -------------------------------------------------------------------------
 
   ipcMain.handle('twitter:get-user-tweets', async (_event, {
-    bearerToken, username, maxResults = 10,
+    bearerToken, username, maxResults = 50,
   }: { bearerToken: string; username: string; maxResults?: number }) => {
     // Step 1: resolve username → numeric user ID
     const userRes = await fetch(
