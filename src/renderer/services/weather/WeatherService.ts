@@ -33,46 +33,7 @@ interface CacheEntry {
   timestamp: number;
 }
 
-// OpenWeatherMap One Call 3.0 response shapes (subset)
-interface OWMCurrent {
-  dt: number;
-  temp: number;
-  feels_like: number;
-  humidity: number;
-  wind_speed: number;
-  wind_deg: number;
-  visibility: number;
-  uvi: number;
-  weather: OWMWeather[];
-}
-
-interface OWMHourly {
-  dt: number;
-  temp: number;
-  pop: number;
-  wind_speed: number;
-  humidity: number;
-  weather: OWMWeather[];
-}
-
-interface OWMDaily {
-  dt: number;
-  temp: { min: number; max: number };
-  pop: number;
-  sunrise: number;
-  sunset: number;
-  weather: OWMWeather[];
-}
-
-interface OWMAlert {
-  sender_name: string;
-  event: string;
-  start: number;
-  end: number;
-  description: string;
-  tags: string[];
-}
-
+// OpenWeatherMap free-tier 2.5 API response shapes
 interface OWMWeather {
   id: number;
   main: string;
@@ -80,13 +41,36 @@ interface OWMWeather {
   icon: string;
 }
 
-interface OWMOneCallResponse {
-  lat: number;
-  lon: number;
-  current: OWMCurrent;
-  hourly: OWMHourly[];
-  daily: OWMDaily[];
-  alerts?: OWMAlert[];
+// /data/2.5/weather – current conditions
+interface OWM25CurrentResponse {
+  dt: number;
+  main: {
+    temp: number;
+    feels_like: number;
+    humidity: number;
+  };
+  weather: OWMWeather[];
+  wind: { speed: number; deg: number };
+  visibility: number;
+  clouds: { all: number };
+}
+
+// /data/2.5/forecast – 5-day/3-hour intervals
+interface OWM25ForecastEntry {
+  dt: number;
+  main: {
+    temp: number;
+    temp_min: number;
+    temp_max: number;
+    humidity: number;
+  };
+  weather: OWMWeather[];
+  wind: { speed: number; deg: number };
+  pop: number; // precipitation probability 0–1
+}
+
+interface OWM25ForecastResponse {
+  list: OWM25ForecastEntry[];
 }
 
 interface OWMGeoResult {
@@ -122,7 +106,7 @@ export class WeatherService {
   // Public API
   // -------------------------------------------------------------------------
 
-  /** Fetch complete weather data for a location */
+  /** Fetch complete weather data for a location (uses free OWM 2.5 endpoints) */
   async getWeather(location: WeatherLocation): Promise<WeatherData> {
     const key = this.cacheKey(location);
     const cached = this.cache.get(key);
@@ -131,17 +115,24 @@ export class WeatherService {
     }
 
     const units = this.unit === 'C' ? 'metric' : 'imperial';
-    const url =
-      `${BASE_URL}/data/3.0/onecall?lat=${location.lat}&lon=${location.lon}` +
-      `&units=${units}&exclude=minutely&appid=${this.apiKey}`;
+    const base = `${BASE_URL}/data/2.5`;
+    const coords = `lat=${location.lat}&lon=${location.lon}&units=${units}&appid=${this.apiKey}`;
 
-    const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`Weather API error: ${res.status} ${res.statusText}`);
+    const [currentRes, forecastRes] = await Promise.all([
+      fetch(`${base}/weather?${coords}`),
+      fetch(`${base}/forecast?${coords}&cnt=40`),
+    ]);
+
+    if (!currentRes.ok) {
+      throw new Error(`Weather API error: ${currentRes.status} ${currentRes.statusText}`);
+    }
+    if (!forecastRes.ok) {
+      throw new Error(`Weather forecast error: ${forecastRes.status} ${forecastRes.statusText}`);
     }
 
-    const raw: OWMOneCallResponse = await res.json();
-    const data = this.mapResponse(raw, location);
+    const rawCurrent: OWM25CurrentResponse = await currentRes.json();
+    const rawForecast: OWM25ForecastResponse = await forecastRes.json();
+    const data = this.mapResponse25(rawCurrent, rawForecast, location);
 
     this.cache.set(key, { data, timestamp: Date.now() });
     return data;
@@ -260,53 +251,66 @@ export class WeatherService {
     }
   }
 
-  private mapResponse(raw: OWMOneCallResponse, location: WeatherLocation): WeatherData {
+  private mapResponse25(
+    rawCurrent: OWM25CurrentResponse,
+    rawForecast: OWM25ForecastResponse,
+    location: WeatherLocation,
+  ): WeatherData {
     const current: WeatherCurrent = {
-      temp: Math.round(raw.current.temp),
-      feelsLike: Math.round(raw.current.feels_like),
-      humidity: raw.current.humidity,
-      windSpeed: Math.round(raw.current.wind_speed),
-      windDirection: raw.current.wind_deg,
-      visibility: Math.round(raw.current.visibility / 1000), // km
-      uvIndex: raw.current.uvi,
-      condition: this.mapCondition(raw.current.weather[0]?.id ?? 800),
-      description: raw.current.weather[0]?.description ?? 'Unknown',
-      icon: raw.current.weather[0]?.icon ?? '01d',
-      updatedAt: raw.current.dt * 1000,
+      temp: Math.round(rawCurrent.main.temp),
+      feelsLike: Math.round(rawCurrent.main.feels_like),
+      humidity: rawCurrent.main.humidity,
+      windSpeed: Math.round(rawCurrent.wind.speed),
+      windDirection: rawCurrent.wind.deg,
+      visibility: Math.round((rawCurrent.visibility ?? 0) / 1000),
+      uvIndex: 0, // not available in free 2.5/weather endpoint
+      condition: this.mapCondition(rawCurrent.weather[0]?.id ?? 800),
+      description: rawCurrent.weather[0]?.description ?? 'Unknown',
+      icon: rawCurrent.weather[0]?.icon ?? '01d',
+      updatedAt: rawCurrent.dt * 1000,
     };
 
-    const hourly: WeatherHourly[] = raw.hourly.slice(0, 48).map((h) => ({
+    // Build hourly from the 3-hour forecast entries (first 24 entries ≈ 3 days)
+    const hourly: WeatherHourly[] = rawForecast.list.slice(0, 24).map((h) => ({
       time: h.dt * 1000,
-      temp: Math.round(h.temp),
+      temp: Math.round(h.main.temp),
       precipProbability: Math.round(h.pop * 100),
       condition: this.mapCondition(h.weather[0]?.id ?? 800),
       icon: h.weather[0]?.icon ?? '01d',
-      windSpeed: Math.round(h.wind_speed),
-      humidity: h.humidity,
+      windSpeed: Math.round(h.wind.speed),
+      humidity: h.main.humidity,
     }));
 
-    const daily: WeatherDaily[] = raw.daily.slice(0, 7).map((d) => ({
-      date: d.dt * 1000,
-      high: Math.round(d.temp.max),
-      low: Math.round(d.temp.min),
-      condition: this.mapCondition(d.weather[0]?.id ?? 800),
-      icon: d.weather[0]?.icon ?? '01d',
-      precipProbability: Math.round(d.pop * 100),
-      sunrise: d.sunrise * 1000,
-      sunset: d.sunset * 1000,
-      description: d.weather[0]?.description ?? '',
-    }));
+    // Aggregate 3-hour intervals into daily forecasts
+    const dayMap = new Map<string, OWM25ForecastEntry[]>();
+    for (const entry of rawForecast.list) {
+      const dateKey = new Date(entry.dt * 1000).toISOString().slice(0, 10);
+      if (!dayMap.has(dateKey)) dayMap.set(dateKey, []);
+      dayMap.get(dateKey)!.push(entry);
+    }
 
-    const alerts: WeatherAlert[] = (raw.alerts ?? []).map((a, i) => ({
-      id: `alert-${a.start}-${i}`,
-      title: a.event,
-      description: a.description,
-      severity: this.mapAlertSeverity(a.tags),
-      event: a.event,
-      start: a.start * 1000,
-      expires: a.end * 1000,
-      source: a.sender_name,
-    }));
+    const daily: WeatherDaily[] = Array.from(dayMap.entries())
+      .slice(0, 7)
+      .map(([dateKey, entries]) => {
+        const high = Math.round(Math.max(...entries.map((e) => e.main.temp_max)));
+        const low = Math.round(Math.min(...entries.map((e) => e.main.temp_min)));
+        const maxPop = Math.round(Math.max(...entries.map((e) => e.pop)) * 100);
+        // Pick the midday entry (or first) for representative condition
+        const mid = entries[Math.floor(entries.length / 2)];
+        return {
+          date: new Date(dateKey + 'T12:00:00Z').getTime(),
+          high,
+          low,
+          condition: this.mapCondition(mid.weather[0]?.id ?? 800),
+          icon: mid.weather[0]?.icon ?? '01d',
+          precipProbability: maxPop,
+          sunrise: 0,
+          sunset: 0,
+          description: mid.weather[0]?.description ?? '',
+        };
+      });
+
+    const alerts: WeatherAlert[] = [];
 
     return { current, hourly, daily, alerts, location };
   }

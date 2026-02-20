@@ -51,6 +51,18 @@ const electronAPI = {
   // YouTube – open a video in a standalone pop-out window
   openYouTubeWindow: (videoId: string) => ipcRenderer.invoke('youtube:open-window', videoId),
 
+  // Twitter / X – fetch recent tweets for a user (proxied through main)
+  twitterGetUserTweets: (params: { bearerToken: string; username: string; maxResults?: number }) =>
+    ipcRenderer.invoke('twitter:get-user-tweets', params) as Promise<{
+      user: { id: string; name: string; username: string };
+      tweets: Array<{
+        id: string;
+        text: string;
+        created_at: string;
+        public_metrics: { like_count: number; retweet_count: number };
+      }>;
+    }>,
+
   // Events from main process (tray controls, etc.)
   on: (channel: string, callback: (...args: unknown[]) => void) => {
     const validChannels = [

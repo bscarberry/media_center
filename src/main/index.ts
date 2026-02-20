@@ -168,6 +168,11 @@ function createWindow(): void {
     },
   });
 
+  // Override user-agent to standard Chrome so YouTube iframes work (Electron UA is blocked)
+  mainWindow.webContents.session.setUserAgent(
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  );
+
   // Gracefully show window when ready
   mainWindow.once('ready-to-show', () => {
     if (wasMaximized) {
@@ -332,7 +337,7 @@ function setupIPC(): void {
   ipcMain.handle('config:get-env', () => {
     return {
       SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID || '',
-      SPOTIFY_REDIRECT_URI: process.env.SPOTIFY_REDIRECT_URI || 'http://127.0.0.1:8888/callback',
+      SPOTIFY_REDIRECT_URI: 'http://127.0.0.1:8888/callback',
       YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || '',
       YOUTUBE_PLAYBACK_MODE: process.env.YOUTUBE_PLAYBACK_MODE || 'iframe',
       YOUTUBE_OAUTH_CLIENT_ID: process.env.YOUTUBE_OAUTH_CLIENT_ID || '',
@@ -343,6 +348,7 @@ function setupIPC(): void {
       WEATHER_DEFAULT_LON: process.env.WEATHER_DEFAULT_LON || '',
       WEATHER_UNIT: process.env.WEATHER_UNIT || 'fahrenheit',
       NEWS_API_KEY: process.env.NEWS_API_KEY || '',
+      TWITTER_BEARER_TOKEN: process.env.TWITTER_BEARER_TOKEN || '',
     };
   });
 
@@ -390,7 +396,7 @@ function setupIPC(): void {
 
   ipcMain.handle('auth:spotify-login', async () => {
     const clientId = process.env.SPOTIFY_CLIENT_ID;
-    const redirectUri = process.env.SPOTIFY_REDIRECT_URI || 'http://127.0.0.1:8888/callback';
+    const redirectUri = 'http://127.0.0.1:8888/callback';
 
     if (!clientId) {
       return { success: false, error: 'SPOTIFY_CLIENT_ID not set in .env' };
@@ -702,6 +708,40 @@ function setupIPC(): void {
     });
     win.loadURL(`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`);
     win.setMenu(null);
+  });
+
+  // -------------------------------------------------------------------------
+  // Twitter / X – proxy API calls through main process (v2 API)
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('twitter:get-user-tweets', async (_event, {
+    bearerToken, username, maxResults = 10,
+  }: { bearerToken: string; username: string; maxResults?: number }) => {
+    // Step 1: resolve username → numeric user ID
+    const userRes = await fetch(
+      `https://api.twitter.com/2/users/by/username/${encodeURIComponent(username)}`,
+      { headers: { Authorization: `Bearer ${bearerToken}` } },
+    );
+    if (!userRes.ok) {
+      const text = await userRes.text().catch(() => userRes.statusText);
+      throw new Error(`Twitter user lookup failed (${userRes.status}): ${text}`);
+    }
+    const userData: { data?: { id: string; name: string; username: string } } = await userRes.json();
+    if (!userData.data) throw new Error(`User @${username} not found`);
+
+    // Step 2: fetch recent tweets for that user
+    const tweetsRes = await fetch(
+      `https://api.twitter.com/2/users/${userData.data.id}/tweets` +
+      `?max_results=${maxResults}&tweet.fields=created_at,public_metrics,text` +
+      `&expansions=author_id&user.fields=name,username,profile_image_url`,
+      { headers: { Authorization: `Bearer ${bearerToken}` } },
+    );
+    if (!tweetsRes.ok) {
+      const text = await tweetsRes.text().catch(() => tweetsRes.statusText);
+      throw new Error(`Twitter timeline fetch failed (${tweetsRes.status}): ${text}`);
+    }
+    const tweetsData = await tweetsRes.json();
+    return { user: userData.data, tweets: tweetsData.data ?? [] };
   });
 }
 

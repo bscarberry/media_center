@@ -924,6 +924,202 @@ function JellyfinPage() {
   );
 }
 
+// ============================================================================
+// TwitterPage
+// ============================================================================
+
+interface RawTweet {
+  id: string;
+  text: string;
+  created_at: string;
+  public_metrics: { like_count: number; retweet_count: number };
+}
+
+interface TwitterUserData {
+  id: string;
+  name: string;
+  username: string;
+}
+
+function relTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60_000) return 'just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return `${Math.floor(diff / 86_400_000)}d ago`;
+}
+
+const TWITTER_ACCOUNTS = ['JackPosobiec', 'Cernovich'];
+
+function TwitterPage() {
+  const [bearerToken, setBearerToken] = useState('');
+  const [results, setResults] = useState<Array<{ user: TwitterUserData; tweets: RawTweet[] } | null>>(
+    TWITTER_ACCOUNTS.map(() => null),
+  );
+  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<(string | null)[]>(TWITTER_ACCOUNTS.map(() => null));
+
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.getConfig) return;
+    api.getConfig().then((cfg: Record<string, string>) => {
+      const token = cfg.TWITTER_BEARER_TOKEN || '';
+      setBearerToken(token);
+      if (!token) return;
+      setLoading(true);
+      Promise.allSettled(
+        TWITTER_ACCOUNTS.map((username) =>
+          api.twitterGetUserTweets({ bearerToken: token, username, maxResults: 10 }),
+        ),
+      ).then((settled) => {
+        setResults(settled.map((r) => (r.status === 'fulfilled' ? (r as PromiseFulfilledResult<any>).value : null)));
+        setErrors(settled.map((r) => (r.status === 'rejected' ? (r as PromiseRejectedResult).reason?.message ?? 'Error' : null)));
+        setLoading(false);
+      });
+    }).catch(() => {});
+  }, []);
+
+  const openTweet = useCallback((username: string, tweetId: string) => {
+    (window as any).electronAPI?.openExternal?.(`https://twitter.com/${username}/status/${tweetId}`);
+  }, []);
+
+  const pageStyle: CSSProperties = { padding: 24, height: '100%', overflowY: 'auto', boxSizing: 'border-box' };
+  const headerStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 };
+  const columnGridStyle: CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+    gap: 20,
+  };
+  const columnStyle: CSSProperties = {
+    background: 'rgba(255,255,255,0.04)',
+    borderRadius: 12,
+    padding: 16,
+    border: '1px solid rgba(255,255,255,0.08)',
+  };
+  const tweetCardStyle: CSSProperties = {
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: 8,
+    padding: '12px 14px',
+    marginBottom: 10,
+    cursor: 'pointer',
+    border: '1px solid transparent',
+    transition: 'border-color 0.15s',
+  };
+  const metaRowStyle: CSSProperties = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.45)',
+  };
+
+  if (!bearerToken && !loading) {
+    return (
+      <div style={pageStyle}>
+        <div style={headerStyle}>
+          <span style={{ fontSize: 28 }}>{'\uD83D\uDC26'}</span>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Twitter / X</h2>
+        </div>
+        <div style={{
+          padding: '20px 24px',
+          borderRadius: 10,
+          background: 'rgba(255,255,255,0.05)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          color: 'rgba(255,255,255,0.6)',
+          fontSize: 14,
+        }}>
+          Add{' '}
+          <code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>
+            TWITTER_BEARER_TOKEN
+          </code>{' '}
+          to your{' '}
+          <code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>
+            .env
+          </code>{' '}
+          to load tweets. Get a Bearer Token from the{' '}
+          <span
+            style={{ color: '#1DA1F2', cursor: 'pointer', textDecoration: 'underline' }}
+            onClick={() => (window as any).electronAPI?.openExternal?.('https://developer.twitter.com/en/portal/dashboard')}
+          >
+            Twitter Developer Portal
+          </span>
+          .
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={pageStyle}>
+      <div style={headerStyle}>
+        <span style={{ fontSize: 28 }}>{'\uD83D\uDC26'}</span>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Twitter / X</h2>
+        {loading && <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>Loading…</span>}
+      </div>
+
+      <div style={columnGridStyle}>
+        {TWITTER_ACCOUNTS.map((username, idx) => {
+          const result = results[idx];
+          const err = errors[idx];
+          return (
+            <div key={username} style={columnStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <span style={{ fontSize: 16 }}>{'\uD83D\uDC26'}</span>
+                <span style={{ fontWeight: 600, fontSize: 15 }}>
+                  {result ? result.user.name : `@${username}`}
+                </span>
+                {result && (
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                    @{result.user.username}
+                  </span>
+                )}
+              </div>
+
+              {err && (
+                <div style={{ fontSize: 12, color: '#ff6b6b', marginBottom: 10 }}>{err}</div>
+              )}
+
+              {loading && !result && !err && (
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 20 }}>
+                  Loading tweets…
+                </div>
+              )}
+
+              {result?.tweets.map((tweet) => (
+                <div
+                  key={tweet.id}
+                  style={tweetCardStyle}
+                  onClick={() => openTweet(result.user.username, tweet.id)}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(29,161,242,0.4)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'transparent'; }}
+                >
+                  <div style={{ fontSize: 13, lineHeight: 1.55, color: 'rgba(255,255,255,0.87)' }}>
+                    {tweet.text}
+                  </div>
+                  <div style={metaRowStyle}>
+                    <span>{relTime(tweet.created_at)}</span>
+                    <span style={{ display: 'flex', gap: 14 }}>
+                      <span>{'\u2665'} {tweet.public_metrics.like_count.toLocaleString()}</span>
+                      <span>{'\uD83D\uDD01'} {tweet.public_metrics.retweet_count.toLocaleString()}</span>
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {result?.tweets.length === 0 && !err && (
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 20 }}>
+                  No tweets available
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function SettingsPage() {
   const { status, loading, refresh } = useSourceStatus();
   const [config, setConfig] = useState<Record<string, string> | null>(null);
@@ -1039,6 +1235,7 @@ const NAV_MEDIA = [
   { path: '/spotify', label: 'Spotify', icon: '\uD83C\uDFB5', color: '#1db954' },
   { path: '/youtube', label: 'YouTube', icon: '\u25B6\uFE0F', color: '#ff0000' },
   { path: '/jellyfin', label: 'Jellyfin', icon: '\uD83C\uDFA5', color: '#aa5cc3' },
+  { path: '/twitter', label: 'Twitter / X', icon: '\uD83D\uDC26', color: '#1DA1F2' },
 ] as const;
 
 const NAV_WIDGETS = [
@@ -1226,6 +1423,7 @@ function AppLayout() {
               <Route path="/spotify" element={<SpotifyPage />} />
               <Route path="/youtube" element={<YouTubePage />} />
               <Route path="/jellyfin" element={<JellyfinPage />} />
+              <Route path="/twitter" element={<TwitterPage />} />
               <Route path="/weather" element={<WeatherPage />} />
               <Route path="/news" element={<NewsPage />} />
               <Route path="/settings" element={<SettingsPage />} />
