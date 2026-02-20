@@ -726,7 +726,7 @@ function setupIPC(): void {
       const text = await userRes.text().catch(() => userRes.statusText);
       throw new Error(`Twitter user lookup failed (${userRes.status}): ${text}`);
     }
-    const userData: { data?: { id: string; name: string; username: string } } = await userRes.json();
+    const userData = (await userRes.json()) as { data?: { id: string; name: string; username: string } };
     if (!userData.data) throw new Error(`User @${username} not found`);
 
     // Step 2: fetch recent tweets for that user
@@ -740,7 +740,7 @@ function setupIPC(): void {
       const text = await tweetsRes.text().catch(() => tweetsRes.statusText);
       throw new Error(`Twitter timeline fetch failed (${tweetsRes.status}): ${text}`);
     }
-    const tweetsData = await tweetsRes.json();
+    const tweetsData = (await tweetsRes.json()) as { data?: Array<Record<string, unknown>> };
     return { user: userData.data, tweets: tweetsData.data ?? [] };
   });
 }
