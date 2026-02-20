@@ -933,6 +933,8 @@ interface RawTweet {
   text: string;
   created_at: string;
   public_metrics: { like_count: number; retweet_count: number };
+  in_reply_to_user_id?: string;
+  referenced_tweets?: Array<{ type: string; id: string }>;
 }
 
 interface TwitterUserData {
@@ -953,9 +955,11 @@ const TWITTER_ACCOUNTS = ['JackPosobiec', 'Cernovich'];
 
 function TwitterPage() {
   const [bearerToken, setBearerToken] = useState('');
-  const [results, setResults] = useState<Array<{ user: TwitterUserData; tweets: RawTweet[] } | null>>(
-    TWITTER_ACCOUNTS.map(() => null),
-  );
+  const [results, setResults] = useState<Array<{
+    user: TwitterUserData;
+    tweets: RawTweet[];
+    includes: { tweets?: Array<{ id: string; text: string }> };
+  } | null>>(TWITTER_ACCOUNTS.map(() => null));
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<(string | null)[]>(TWITTER_ACCOUNTS.map(() => null));
 
@@ -1086,26 +1090,49 @@ function TwitterPage() {
                 </div>
               )}
 
-              {result?.tweets.map((tweet) => (
-                <div
-                  key={tweet.id}
-                  style={tweetCardStyle}
-                  onClick={() => openTweet(result.user.username, tweet.id)}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(29,161,242,0.4)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'transparent'; }}
-                >
-                  <div style={{ fontSize: 13, lineHeight: 1.55, color: 'rgba(255,255,255,0.87)' }}>
-                    {tweet.text}
+              {result?.tweets.map((tweet) => {
+                const refId = tweet.referenced_tweets?.find((r) => r.type === 'replied_to')?.id;
+                const refText = refId
+                  ? (result.includes.tweets ?? []).find((t) => t.id === refId)?.text
+                  : undefined;
+                const isReply = !!tweet.in_reply_to_user_id;
+                return (
+                  <div
+                    key={tweet.id}
+                    style={tweetCardStyle}
+                    onClick={() => openTweet(result.user.username, tweet.id)}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(29,161,242,0.4)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = 'transparent'; }}
+                  >
+                    {isReply && (
+                      <div style={{
+                        borderLeft: '2px solid rgba(29,161,242,0.45)',
+                        paddingLeft: 8,
+                        marginBottom: 8,
+                      }}>
+                        <div style={{ fontSize: 11, color: 'rgba(29,161,242,0.8)', marginBottom: refText ? 4 : 0 }}>
+                          {'\u21A9'} Replying to a tweet
+                        </div>
+                        {refText && (
+                          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.4 }}>
+                            {refText.length > 140 ? refText.slice(0, 140) + '\u2026' : refText}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 13, lineHeight: 1.55, color: 'rgba(255,255,255,0.87)' }}>
+                      {tweet.text}
+                    </div>
+                    <div style={metaRowStyle}>
+                      <span>{relTime(tweet.created_at)}</span>
+                      <span style={{ display: 'flex', gap: 14 }}>
+                        <span>{'\u2665'} {tweet.public_metrics.like_count.toLocaleString()}</span>
+                        <span>{'\uD83D\uDD01'} {tweet.public_metrics.retweet_count.toLocaleString()}</span>
+                      </span>
+                    </div>
                   </div>
-                  <div style={metaRowStyle}>
-                    <span>{relTime(tweet.created_at)}</span>
-                    <span style={{ display: 'flex', gap: 14 }}>
-                      <span>{'\u2665'} {tweet.public_metrics.like_count.toLocaleString()}</span>
-                      <span>{'\uD83D\uDD01'} {tweet.public_metrics.retweet_count.toLocaleString()}</span>
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
 
               {result?.tweets.length === 0 && !err && (
                 <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: 20 }}>

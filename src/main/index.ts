@@ -580,18 +580,19 @@ function setupIPC(): void {
     const apiKey = process.env.JELLYFIN_API_KEY;
     const username = process.env.JELLYFIN_USERNAME;
     const password = process.env.JELLYFIN_PASSWORD;
+    const base = serverUrl.replace(/\/$/, ''); // strip trailing slash to avoid double-slash URLs
 
     // API key auth
     if (apiKey) {
       try {
-        const res = await fetch(`${serverUrl}/System/Ping`, {
+        const res = await fetch(`${base}/System/Ping`, {
           headers: { 'X-Emby-Token': apiKey },
         });
         if (res.ok) {
           getJellyfinStore().set('jellyfinSession', {
             accessToken: apiKey,
             userId: 'apikey-user',
-            serverId: serverUrl,
+            serverId: base,
           });
           return { success: true };
         }
@@ -609,7 +610,7 @@ function setupIPC(): void {
     try {
       const authHeader =
         `MediaBrowser Client="Brandon's Media Hub", Device="Desktop", DeviceId="brandons-media-hub-electron", Version="1.0.0"`;
-      const res = await fetch(`${serverUrl}/Users/AuthenticateByName`, {
+      const res = await fetch(`${base}/Users/AuthenticateByName`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -729,19 +730,28 @@ function setupIPC(): void {
     const userData = (await userRes.json()) as { data?: { id: string; name: string; username: string } };
     if (!userData.data) throw new Error(`User @${username} not found`);
 
-    // Step 2: fetch recent tweets for that user
+    // Step 2: fetch recent tweets for that user (including replies)
     const tweetsRes = await fetch(
       `https://api.twitter.com/2/users/${userData.data.id}/tweets` +
-      `?max_results=${maxResults}&tweet.fields=created_at,public_metrics,text` +
-      `&expansions=author_id&user.fields=name,username,profile_image_url`,
+      `?max_results=${maxResults}` +
+      `&tweet.fields=created_at,public_metrics,text,in_reply_to_user_id,referenced_tweets` +
+      `&expansions=author_id,referenced_tweets.id` +
+      `&user.fields=name,username,profile_image_url`,
       { headers: { Authorization: `Bearer ${bearerToken}` } },
     );
     if (!tweetsRes.ok) {
       const text = await tweetsRes.text().catch(() => tweetsRes.statusText);
       throw new Error(`Twitter timeline fetch failed (${tweetsRes.status}): ${text}`);
     }
-    const tweetsData = (await tweetsRes.json()) as { data?: Array<Record<string, unknown>> };
-    return { user: userData.data, tweets: tweetsData.data ?? [] };
+    const tweetsData = (await tweetsRes.json()) as {
+      data?: Array<Record<string, unknown>>;
+      includes?: { tweets?: Array<Record<string, unknown>> };
+    };
+    return {
+      user: userData.data,
+      tweets: tweetsData.data ?? [],
+      includes: tweetsData.includes ?? {},
+    };
   });
 }
 
