@@ -339,6 +339,9 @@ function setupIPC(): void {
       JELLYFIN_SERVER_URL: process.env.JELLYFIN_SERVER_URL || '',
       JELLYFIN_USERNAME: process.env.JELLYFIN_USERNAME || '',
       WEATHER_API_KEY: process.env.WEATHER_API_KEY || '',
+      WEATHER_DEFAULT_LAT: process.env.WEATHER_DEFAULT_LAT || '',
+      WEATHER_DEFAULT_LON: process.env.WEATHER_DEFAULT_LON || '',
+      WEATHER_UNIT: process.env.WEATHER_UNIT || 'fahrenheit',
       NEWS_API_KEY: process.env.NEWS_API_KEY || '',
     };
   });
@@ -660,6 +663,45 @@ function setupIPC(): void {
     } catch (err: any) {
       return { success: false, error: `YouTube API check failed: ${err.message}` };
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // News – fetch via main process to bypass NewsAPI free-plan origin check
+  // -------------------------------------------------------------------------
+
+  const NEWS_CAT_MAP: Record<string, string | null> = {
+    all: null, technology: 'technology', world: 'general', business: 'business',
+    entertainment: 'entertainment', sports: 'sports', science: 'science', health: 'health',
+  };
+
+  ipcMain.handle('news:get-headlines', async (_event, { apiKey, category = 'all', page = 1, pageSize = 20 }: {
+    apiKey: string; category?: string; page?: number; pageSize?: number;
+  }) => {
+    let url = `https://newsapi.org/v2/top-headlines?country=us&pageSize=${pageSize}&page=${page}`;
+    const cat = NEWS_CAT_MAP[category];
+    if (cat) url += `&category=${cat}`;
+    const res = await fetch(url, { headers: { 'X-Api-Key': apiKey } });
+    if (!res.ok) {
+      const text = await res.text().catch(() => res.statusText);
+      throw new Error(`News API error ${res.status}: ${text}`);
+    }
+    return res.json();
+  });
+
+  // -------------------------------------------------------------------------
+  // YouTube – open a video in a dedicated pop-out BrowserWindow
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('youtube:open-window', (_event, videoId: string) => {
+    const win = new BrowserWindow({
+      width: 960,
+      height: 560,
+      title: 'YouTube',
+      backgroundColor: '#000000',
+      webPreferences: { nodeIntegration: false, contextIsolation: true },
+    });
+    win.loadURL(`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`);
+    win.setMenu(null);
   });
 }
 

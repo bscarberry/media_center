@@ -44,6 +44,13 @@ const electronAPI = {
   // Environment config (from main process .env)
   getConfig: () => ipcRenderer.invoke('config:get-env') as Promise<Record<string, string>>,
 
+  // News – proxied through main process to bypass origin restrictions
+  newsGetHeadlines: (params: { apiKey: string; category?: string; page?: number; pageSize?: number }) =>
+    ipcRenderer.invoke('news:get-headlines', params) as Promise<{ status: string; totalResults: number; articles: unknown[] }>,
+
+  // YouTube – open a video in a standalone pop-out window
+  openYouTubeWindow: (videoId: string) => ipcRenderer.invoke('youtube:open-window', videoId),
+
   // Events from main process (tray controls, etc.)
   on: (channel: string, callback: (...args: unknown[]) => void) => {
     const validChannels = [
