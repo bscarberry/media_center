@@ -969,7 +969,7 @@ function TwitterPage() {
       setLoading(true);
       Promise.allSettled(
         TWITTER_ACCOUNTS.map((username) =>
-          api.twitterGetUserTweets({ bearerToken: token, username, maxResults: 10 }),
+          api.twitterGetUserTweets({ bearerToken: token, username, maxResults: 50 }),
         ),
       ).then((settled) => {
         setResults(settled.map((r) => (r.status === 'fulfilled' ? (r as PromiseFulfilledResult<any>).value : null)));
