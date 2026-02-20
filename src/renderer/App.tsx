@@ -25,7 +25,11 @@ import { HomePage } from './components/home/HomePage';
 import { useSourceStatus, disconnectSource } from './hooks/useSourceStatus';
 import { UnifiedSearch } from './components/library/UnifiedSearch';
 import { SearchService } from './services/search/SearchService';
+import type { SearchServiceDeps } from './services/search/SearchService';
 import { YouTubeService } from './services/youtube/YouTubeService';
+import { TokenManager } from './services/spotify/TokenManager';
+import { SpotifyAPI } from './services/spotify/SpotifyAPI';
+import { JellyfinClient } from './services/jellyfin/JellyfinClient';
 import { WeatherService, weatherConditionIcon } from './services/weather/WeatherService';
 import { timeAgo, categoryLabel } from './services/news/NewsService';
 import type { WeatherData, WeatherLocation, NewsCategory } from './types/dashboard';
@@ -168,11 +172,24 @@ function SearchPage() {
 
     api.getConfig().then((config: Record<string, string>) => {
       if (cancelled) return;
-      const deps: { youtubeService?: YouTubeService } = {};
+      const deps: SearchServiceDeps = {};
       if (config.YOUTUBE_API_KEY) {
         deps.youtubeService = new YouTubeService({
           apiKey: config.YOUTUBE_API_KEY,
           playbackMode: (config.YOUTUBE_PLAYBACK_MODE as 'iframe' | 'extract') || 'iframe',
+        });
+      }
+      if (config.SPOTIFY_CLIENT_ID) {
+        const tm = new TokenManager(config.SPOTIFY_CLIENT_ID);
+        deps.spotifyApi = new SpotifyAPI(tm);
+      }
+      if (config.JELLYFIN_SERVER_URL) {
+        deps.jellyfinClient = new JellyfinClient({
+          serverUrl: config.JELLYFIN_SERVER_URL,
+          transcodeQuality: 'high',
+          enableTranscoding: false,
+          cacheDirectory: '',
+          maxCacheSize: 0,
         });
       }
       setSearchService(new SearchService(deps));
@@ -366,15 +383,129 @@ function ServicePage({
 }
 
 function SpotifyPage() {
+  const { status, loading: statusLoading, refresh } = useSourceStatus();
+  const [content, setContent] = useState<{ playlists: any[]; topTracks: any[]; profile: any } | null>(null);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentError, setContentError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!status.spotify) return;
+    const api = (window as any).electronAPI;
+    if (!api?.spotifyGetContent) return;
+    setContentLoading(true);
+    setContentError(null);
+    api.spotifyGetContent()
+      .then((data: any) => { setContent(data); setContentLoading(false); })
+      .catch((err: any) => { setContentError(err?.message ?? 'Failed to load Spotify content'); setContentLoading(false); });
+  }, [status.spotify]);
+
+  const open = useCallback((url: string) => {
+    (window as any).electronAPI?.openExternal?.(url);
+  }, []);
+
+  const pg: CSSProperties = { padding: 24, height: '100%', overflowY: 'auto', boxSizing: 'border-box' };
+  const hdr: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 };
+  const sectionTitle: CSSProperties = { fontSize: 16, fontWeight: 600, marginBottom: 14, color: '#fff' };
+  const grid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14, marginBottom: 32 };
+  const card: CSSProperties = {
+    background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 12,
+    cursor: 'pointer', transition: 'background 0.15s',
+  };
+  const imgBox: CSSProperties = { width: '100%', aspectRatio: '1', borderRadius: 6, overflow: 'hidden', marginBottom: 8, background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+
+  if (statusLoading) {
+    return <div style={pg}><p style={{ color: 'rgba(255,255,255,0.4)' }}>Loading…</p></div>;
+  }
+
+  if (!status.spotify) {
+    return (
+      <ServicePage name="Spotify" icon={'\uD83C\uDFB5'} color="#1db954" source="spotify"
+        description="Browse and play music from Spotify." connectText="Connect Spotify" />
+    );
+  }
+
   return (
-    <ServicePage
-      name="Spotify"
-      icon={'\uD83C\uDFB5'}
-      color="#1db954"
-      source="spotify"
-      description="Browse and play music from Spotify."
-      connectText="Connect Spotify"
-    />
+    <div style={pg}>
+      <div style={hdr}>
+        <span style={{ fontSize: 28 }}>{'\uD83C\uDFB5'}</span>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Spotify</h2>
+          {content?.profile?.display_name && (
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+              {content.profile.display_name}
+            </div>
+          )}
+        </div>
+        <button onClick={refresh} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 18 }}>↻</button>
+      </div>
+
+      {contentLoading && <p style={{ color: 'rgba(255,255,255,0.4)' }}>Loading your library…</p>}
+      {contentError && <p style={{ color: '#ff6b6b', fontSize: 13 }}>{contentError}</p>}
+
+      {content && !contentLoading && (
+        <>
+          {/* Top Tracks */}
+          {content.topTracks.length > 0 && (
+            <div style={{ marginBottom: 32 }}>
+              <div style={sectionTitle}>Top Tracks This Month</div>
+              {content.topTracks.map((track: any, i: number) => (
+                <div
+                  key={track.id}
+                  onClick={() => open(track.external_urls?.spotify)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px',
+                    borderRadius: 8, cursor: 'pointer', marginBottom: 4,
+                    background: 'rgba(255,255,255,0.04)',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.08)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.04)'; }}
+                >
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', width: 18, textAlign: 'right', flexShrink: 0 }}>{i + 1}</span>
+                  {track.album?.images?.[0]?.url
+                    ? <img src={track.album.images[0].url} alt="" style={{ width: 36, height: 36, borderRadius: 4, flexShrink: 0 }} />
+                    : <div style={{ width: 36, height: 36, borderRadius: 4, background: '#282828', flexShrink: 0 }} />
+                  }
+                  <div style={{ overflow: 'hidden' }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.name}</div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {track.artists?.map((a: any) => a.name).join(', ')}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Playlists */}
+          {content.playlists.length > 0 && (
+            <div>
+              <div style={sectionTitle}>Your Playlists</div>
+              <div style={grid}>
+                {content.playlists.map((pl: any) => (
+                  <div
+                    key={pl.id}
+                    style={card}
+                    onClick={() => open(pl.external_urls?.spotify)}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.09)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)'; }}
+                  >
+                    <div style={imgBox}>
+                      {pl.images?.[0]?.url
+                        ? <img src={pl.images[0].url} alt={pl.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <span style={{ fontSize: 32 }}>{'\uD83C\uDFB5'}</span>
+                      }
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pl.name}</div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>{pl.tracks?.total ?? 0} tracks</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -543,7 +674,7 @@ function YouTubePage() {
               </div>
               <iframe
                 key={selectedVideo.id}
-                src={`https://www.youtube.com/embed/${selectedVideo.id}?autoplay=1&rel=0`}
+                src={`https://www.youtube-nocookie.com/embed/${selectedVideo.id}?autoplay=1&rel=0`}
                 style={{ width: '100%', height: 360, borderRadius: 8, border: 'none', display: 'block' }}
                 allow="autoplay; encrypted-media; fullscreen"
                 allowFullScreen
@@ -912,15 +1043,151 @@ function NewsPage() {
 }
 
 function JellyfinPage() {
+  const { status, loading: statusLoading, refresh } = useSourceStatus();
+  const [content, setContent] = useState<{
+    recentItems: any[]; resumeItems: any[]; serverUrl: string; accessToken: string;
+  } | null>(null);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentError, setContentError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!status.jellyfin) return;
+    const api = (window as any).electronAPI;
+    if (!api?.jellyfinGetContent) return;
+    setContentLoading(true);
+    setContentError(null);
+    api.jellyfinGetContent()
+      .then((data: any) => { setContent(data); setContentLoading(false); })
+      .catch((err: any) => { setContentError(err?.message ?? 'Failed to load Jellyfin content'); setContentLoading(false); });
+  }, [status.jellyfin]);
+
+  const open = useCallback((url: string) => {
+    (window as any).electronAPI?.openExternal?.(url);
+  }, []);
+
+  const pg: CSSProperties = { padding: 24, height: '100%', overflowY: 'auto', boxSizing: 'border-box' };
+  const hdr: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 };
+  const sectionTitle: CSSProperties = { fontSize: 16, fontWeight: 600, marginBottom: 14, color: '#fff' };
+  const posterGrid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 14, marginBottom: 32 };
+  const posterCard: CSSProperties = {
+    background: 'rgba(255,255,255,0.05)', borderRadius: 8, overflow: 'hidden',
+    cursor: 'pointer', transition: 'background 0.15s',
+  };
+  const scrollRow: CSSProperties = { display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 8, marginBottom: 32 };
+
+  const imgUrl = (serverUrl: string, id: string, accessToken: string) =>
+    `${serverUrl}/Items/${id}/Images/Primary?maxWidth=300&api_key=${encodeURIComponent(accessToken)}`;
+
+  const openItem = useCallback((serverUrl: string, id: string) => {
+    open(`${serverUrl}/web/index.html#!/details?id=${id}`);
+  }, [open]);
+
+  if (statusLoading) {
+    return <div style={pg}><p style={{ color: 'rgba(255,255,255,0.4)' }}>Loading…</p></div>;
+  }
+
+  if (!status.jellyfin) {
+    return (
+      <ServicePage name="Jellyfin" icon={'\uD83C\uDFA5'} color="#aa5cc3" source="jellyfin"
+        description="Stream your personal media library from Jellyfin. Set JELLYFIN_SERVER_URL and credentials in .env to connect."
+        connectText="Connect Jellyfin" />
+    );
+  }
+
   return (
-    <ServicePage
-      name="Jellyfin"
-      icon={'\uD83C\uDFA5'}
-      color="#aa5cc3"
-      source="jellyfin"
-      description="Stream your personal media library from Jellyfin. Set JELLYFIN_SERVER_URL and credentials in .env to connect."
-      connectText="Connect Jellyfin"
-    />
+    <div style={pg}>
+      <div style={hdr}>
+        <span style={{ fontSize: 28 }}>{'\uD83C\uDFA5'}</span>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Jellyfin</h2>
+        <button onClick={refresh} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 18 }}>↻</button>
+      </div>
+
+      {contentLoading && <p style={{ color: 'rgba(255,255,255,0.4)' }}>Loading your library…</p>}
+      {contentError && <p style={{ color: '#ff6b6b', fontSize: 13 }}>{contentError}</p>}
+
+      {content && !contentLoading && (
+        <>
+          {/* Continue Watching */}
+          {content.resumeItems.length > 0 && (
+            <div>
+              <div style={sectionTitle}>Continue Watching</div>
+              <div style={scrollRow}>
+                {content.resumeItems.map((item: any) => (
+                  <div
+                    key={item.Id}
+                    style={{ ...posterCard, flexShrink: 0, width: 160 }}
+                    onClick={() => openItem(content.serverUrl, item.Id)}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.09)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)'; }}
+                  >
+                    <div style={{ width: '100%', height: 90, background: '#1a1a1a', overflow: 'hidden', position: 'relative' }}>
+                      <img
+                        src={imgUrl(content.serverUrl, item.Id, content.accessToken)}
+                        alt={item.Name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                      {item.UserData?.PlayedPercentage > 0 && (
+                        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, background: 'rgba(255,255,255,0.2)' }}>
+                          <div style={{ height: '100%', width: `${item.UserData.PlayedPercentage}%`, background: '#aa5cc3' }} />
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ padding: '8px 10px' }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {item.SeriesName || item.Name}
+                      </div>
+                      {item.SeriesName && (
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
+                          S{item.ParentIndexNumber}:E{item.IndexNumber}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recently Added */}
+          {content.recentItems.length > 0 && (
+            <div>
+              <div style={sectionTitle}>Recently Added</div>
+              <div style={posterGrid}>
+                {content.recentItems.map((item: any) => (
+                  <div
+                    key={item.Id}
+                    style={posterCard}
+                    onClick={() => openItem(content.serverUrl, item.Id)}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.09)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)'; }}
+                  >
+                    <div style={{ width: '100%', aspectRatio: '2/3', background: '#1a1a1a', overflow: 'hidden' }}>
+                      <img
+                        src={imgUrl(content.serverUrl, item.Id, content.accessToken)}
+                        alt={item.Name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    </div>
+                    <div style={{ padding: '8px 10px' }}>
+                      <div style={{ fontSize: 12, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.Name}</div>
+                      {item.ProductionYear && (
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>{item.ProductionYear}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {content.recentItems.length === 0 && content.resumeItems.length === 0 && (
+            <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>No media found in your Jellyfin library.</p>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

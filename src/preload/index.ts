@@ -51,6 +51,21 @@ const electronAPI = {
   // YouTube – open a video in a standalone pop-out window
   openYouTubeWindow: (videoId: string) => ipcRenderer.invoke('youtube:open-window', videoId),
 
+  // Spotify – fetch playlists + top tracks for the Spotify content page
+  spotifyGetContent: () => ipcRenderer.invoke('spotify:get-content') as Promise<{
+    playlists: any[];
+    topTracks: any[];
+    profile: any;
+  }>,
+
+  // Jellyfin – fetch recently added + resume items for the Jellyfin content page
+  jellyfinGetContent: () => ipcRenderer.invoke('jellyfin:get-content') as Promise<{
+    recentItems: any[];
+    resumeItems: any[];
+    serverUrl: string;
+    accessToken: string;
+  }>,
+
   // Twitter / X – fetch recent tweets for a user (proxied through main)
   twitterGetUserTweets: (params: { bearerToken: string; username: string; maxResults?: number }) =>
     ipcRenderer.invoke('twitter:get-user-tweets', params) as Promise<{
