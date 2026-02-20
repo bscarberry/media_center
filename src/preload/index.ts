@@ -60,7 +60,10 @@ const electronAPI = {
         text: string;
         created_at: string;
         public_metrics: { like_count: number; retweet_count: number };
+        in_reply_to_user_id?: string;
+        referenced_tweets?: Array<{ type: string; id: string }>;
       }>;
+      includes: { tweets?: Array<{ id: string; text: string }> };
     }>,
 
   // Events from main process (tray controls, etc.)
