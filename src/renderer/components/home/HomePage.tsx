@@ -2,7 +2,7 @@
 // HomePage – rich dashboard with weather, news, now-playing, and quick access
 // ============================================================================
 
-import React, { useState, useMemo, type CSSProperties } from 'react';
+import React, { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // ---------------------------------------------------------------------------
@@ -199,42 +199,94 @@ function NowPlayingCard() {
 // Weather Card (embedded mini widget)
 // ---------------------------------------------------------------------------
 
+interface DashboardWeather {
+  temp: number;
+  feelsLike: number;
+  humidity: number;
+  windSpeed: number;
+  description: string;
+  icon: string;
+  locationName: string;
+}
+
 function WeatherCard() {
-  // Show a compact weather preview
-  // In a full implementation, this would pull from WeatherService
+  const [weather, setWeather] = useState<DashboardWeather | null>(null);
+  const [noConfig, setNoConfig] = useState(false);
+
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.getConfig) return;
+    api.getConfig().then(async (cfg: Record<string, string>) => {
+      if (!cfg.WEATHER_API_KEY || !cfg.WEATHER_DEFAULT_LAT || !cfg.WEATHER_DEFAULT_LON) {
+        setNoConfig(true);
+        return;
+      }
+      const units = cfg.WEATHER_UNIT?.toLowerCase().startsWith('c') ? 'metric' : 'imperial';
+      const base = 'https://api.openweathermap.org/data/2.5';
+      const coords = `lat=${cfg.WEATHER_DEFAULT_LAT}&lon=${cfg.WEATHER_DEFAULT_LON}&units=${units}&appid=${cfg.WEATHER_API_KEY}`;
+      try {
+        const res = await fetch(`${base}/weather?${coords}`);
+        if (!res.ok) return;
+        const d = await res.json();
+        setWeather({
+          temp: Math.round(d.main.temp),
+          feelsLike: Math.round(d.main.feels_like),
+          humidity: d.main.humidity,
+          windSpeed: Math.round(d.wind?.speed ?? 0),
+          description: d.weather?.[0]?.description ?? '',
+          icon: d.weather?.[0]?.icon ?? '01d',
+          locationName: d.name ?? '',
+        });
+      } catch { /* silent */ }
+    }).catch(() => {});
+  }, []);
+
+  const speedUnit = 'mph';
+
   return (
     <div style={widgetCard}>
       <div style={widgetHeader}>
         <span style={{ fontSize: 14 }}>{'\u2601\uFE0F'}</span>
-        <h3 style={widgetTitleText}>Weather</h3>
+        <h3 style={widgetTitleText}>Weather{weather ? ` — ${weather.locationName}` : ''}</h3>
       </div>
       <div style={widgetBody}>
-        <div style={weatherPreview}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 48 }}>{'\u2600\uFE0F'}</span>
-            <div>
-              <div style={{ fontSize: 32, fontWeight: 700, color: '#ffffff', lineHeight: 1 }}>--°F</div>
-              <div style={{ fontSize: 13, color: '#b3b3b3', marginTop: 4 }}>No weather data</div>
+        {weather ? (
+          <div style={weatherPreview}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <img
+                src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`}
+                alt={weather.description}
+                style={{ width: 56, height: 56 }}
+              />
+              <div>
+                <div style={{ fontSize: 36, fontWeight: 700, color: '#ffffff', lineHeight: 1 }}>{weather.temp}°</div>
+                <div style={{ fontSize: 12, color: '#b3b3b3', marginTop: 4, textTransform: 'capitalize' }}>{weather.description}</div>
+              </div>
+            </div>
+            <div style={weatherDetails}>
+              <div style={weatherDetailItem}>
+                <span style={{ color: '#6a6a6a' }}>Humidity</span>
+                <span style={{ color: '#b3b3b3' }}>{weather.humidity}%</span>
+              </div>
+              <div style={weatherDetailItem}>
+                <span style={{ color: '#6a6a6a' }}>Wind</span>
+                <span style={{ color: '#b3b3b3' }}>{weather.windSpeed} {speedUnit}</span>
+              </div>
+              <div style={weatherDetailItem}>
+                <span style={{ color: '#6a6a6a' }}>Feels like</span>
+                <span style={{ color: '#b3b3b3' }}>{weather.feelsLike}°</span>
+              </div>
             </div>
           </div>
-          <div style={weatherDetails}>
-            <div style={weatherDetailItem}>
-              <span style={{ color: '#6a6a6a' }}>Humidity</span>
-              <span style={{ color: '#b3b3b3' }}>--%</span>
-            </div>
-            <div style={weatherDetailItem}>
-              <span style={{ color: '#6a6a6a' }}>Wind</span>
-              <span style={{ color: '#b3b3b3' }}>-- mph</span>
-            </div>
-            <div style={weatherDetailItem}>
-              <span style={{ color: '#6a6a6a' }}>Feels like</span>
-              <span style={{ color: '#b3b3b3' }}>--°F</span>
+        ) : (
+          <div style={weatherPreview}>
+            <div style={{ fontSize: 11, color: '#4a4a4a', textAlign: 'center', marginTop: 16 }}>
+              {noConfig
+                ? 'Set WEATHER_API_KEY + WEATHER_DEFAULT_LAT/LON in .env for dashboard weather'
+                : 'Loading...'}
             </div>
           </div>
-          <div style={{ fontSize: 11, color: '#4a4a4a', marginTop: 12, textAlign: 'center' }}>
-            Configure weather API key in Settings
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -244,7 +296,33 @@ function WeatherCard() {
 // News Card (embedded mini widget)
 // ---------------------------------------------------------------------------
 
+interface DashboardHeadline {
+  title: string;
+  url: string;
+  source: { name: string };
+  publishedAt: string;
+}
+
 function NewsCard() {
+  const [headlines, setHeadlines] = useState<DashboardHeadline[]>([]);
+  const [noKey, setNoKey] = useState(false);
+
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.getConfig || !api?.newsGetHeadlines) return;
+    api.getConfig().then((cfg: Record<string, string>) => {
+      if (!cfg.NEWS_API_KEY) { setNoKey(true); return; }
+      api.newsGetHeadlines({ apiKey: cfg.NEWS_API_KEY, pageSize: 5 })
+        .then((data: any) => setHeadlines(data.articles ?? []))
+        .catch(() => {});
+    }).catch(() => {});
+  }, []);
+
+  const openArticle = (url: string) => {
+    const api = (window as any).electronAPI;
+    if (api?.openExternal) api.openExternal(url);
+  };
+
   return (
     <div style={widgetCard}>
       <div style={widgetHeader}>
@@ -252,11 +330,33 @@ function NewsCard() {
         <h3 style={widgetTitleText}>News</h3>
       </div>
       <div style={widgetBody}>
-        <div style={emptyState}>
-          <span style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDCF0'}</span>
-          <div style={{ fontSize: 13, color: '#6a6a6a' }}>No news articles</div>
-          <div style={{ fontSize: 11, color: '#4a4a4a', marginTop: 4 }}>Configure News API key in Settings</div>
-        </div>
+        {headlines.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {headlines.map((article, i) => (
+              <button
+                key={i}
+                onClick={() => openArticle(article.url)}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: '6px 8px', borderRadius: 6,
+                  background: 'none', border: 'none', cursor: 'pointer',
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: 500, color: '#ffffff', lineHeight: 1.4, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                  {article.title}
+                </div>
+                <div style={{ fontSize: 10, color: '#6a6a6a' }}>{article.source.name}</div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div style={emptyState}>
+            <span style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDCF0'}</span>
+            <div style={{ fontSize: 13, color: '#6a6a6a' }}>
+              {noKey ? 'Add NEWS_API_KEY to .env' : 'Loading headlines...'}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

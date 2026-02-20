@@ -168,6 +168,11 @@ function createWindow(): void {
     },
   });
 
+  // Override user-agent to standard Chrome so YouTube iframes work (Electron UA is blocked)
+  mainWindow.webContents.session.setUserAgent(
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  );
+
   // Gracefully show window when ready
   mainWindow.once('ready-to-show', () => {
     if (wasMaximized) {
@@ -332,7 +337,7 @@ function setupIPC(): void {
   ipcMain.handle('config:get-env', () => {
     return {
       SPOTIFY_CLIENT_ID: process.env.SPOTIFY_CLIENT_ID || '',
-      SPOTIFY_REDIRECT_URI: process.env.SPOTIFY_REDIRECT_URI || 'http://127.0.0.1:8888/callback',
+      SPOTIFY_REDIRECT_URI: 'http://127.0.0.1:8888/callback',
       YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || '',
       YOUTUBE_PLAYBACK_MODE: process.env.YOUTUBE_PLAYBACK_MODE || 'iframe',
       YOUTUBE_OAUTH_CLIENT_ID: process.env.YOUTUBE_OAUTH_CLIENT_ID || '',
@@ -390,7 +395,7 @@ function setupIPC(): void {
 
   ipcMain.handle('auth:spotify-login', async () => {
     const clientId = process.env.SPOTIFY_CLIENT_ID;
-    const redirectUri = process.env.SPOTIFY_REDIRECT_URI || 'http://127.0.0.1:8888/callback';
+    const redirectUri = 'http://127.0.0.1:8888/callback';
 
     if (!clientId) {
       return { success: false, error: 'SPOTIFY_CLIENT_ID not set in .env' };
