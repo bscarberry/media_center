@@ -17,6 +17,11 @@ export default defineConfig({
       '@utils': path.resolve(__dirname, 'src/renderer/utils'),
       '@config': path.resolve(__dirname, 'src/renderer/config'),
       '@renderer': path.resolve(__dirname, 'src/renderer'),
+      // electron-store uses Node.js built-ins (path, fs, crypto) that Vite
+      // stubs out in the browser build, crashing the renderer on startup.
+      // All real token/session storage is in the main process (accessed via IPC),
+      // so the renderer only ever needs a no-op placeholder.
+      'electron-store': path.resolve(__dirname, 'src/renderer/electron-store-stub.ts'),
     },
   },
 
