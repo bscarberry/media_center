@@ -162,8 +162,8 @@ function createWindow(): void {
     webPreferences: {
       preload: path.join(__dirname, '..', 'preload', 'index.js'),
       contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false, // Required for electron-store in preload
+      nodeIntegration: true, // Required so renderer can require() externalized Node modules (electron-store, path, fs, crypto)
+      sandbox: false,
       webSecurity: !IS_DEV,
     },
   });

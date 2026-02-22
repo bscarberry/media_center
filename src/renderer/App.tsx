@@ -26,6 +26,9 @@ import { useSourceStatus, disconnectSource } from './hooks/useSourceStatus';
 import { UnifiedSearch } from './components/library/UnifiedSearch';
 import { SearchService } from './services/search/SearchService';
 import { YouTubeService } from './services/youtube/YouTubeService';
+import { TokenManager } from './services/spotify/TokenManager';
+import { SpotifyAPI } from './services/spotify/SpotifyAPI';
+import { JellyfinClient } from './services/jellyfin/JellyfinClient';
 import { WeatherService, weatherConditionIcon } from './services/weather/WeatherService';
 import { timeAgo, categoryLabel } from './services/news/NewsService';
 import type { WeatherData, WeatherLocation, NewsCategory } from './types/dashboard';
@@ -168,11 +171,27 @@ function SearchPage() {
 
     api.getConfig().then((config: Record<string, string>) => {
       if (cancelled) return;
-      const deps: { youtubeService?: YouTubeService } = {};
+      const deps: {
+        youtubeService?: YouTubeService;
+        spotifyApi?: SpotifyAPI;
+        jellyfinClient?: JellyfinClient;
+      } = {};
       if (config.YOUTUBE_API_KEY) {
         deps.youtubeService = new YouTubeService({
           apiKey: config.YOUTUBE_API_KEY,
           playbackMode: (config.YOUTUBE_PLAYBACK_MODE as 'iframe' | 'extract') || 'iframe',
+        });
+      }
+      if (config.SPOTIFY_CLIENT_ID) {
+        deps.spotifyApi = new SpotifyAPI(new TokenManager(config.SPOTIFY_CLIENT_ID));
+      }
+      if (config.JELLYFIN_SERVER_URL) {
+        deps.jellyfinClient = new JellyfinClient({
+          serverUrl: config.JELLYFIN_SERVER_URL,
+          transcodeQuality: 'high',
+          enableTranscoding: false,
+          cacheDirectory: '',
+          maxCacheSize: 0,
         });
       }
       setSearchService(new SearchService(deps));

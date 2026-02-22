@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { builtinModules } from 'module';
 
 export default defineConfig({
   plugins: [react()],
@@ -17,11 +18,6 @@ export default defineConfig({
       '@utils': path.resolve(__dirname, 'src/renderer/utils'),
       '@config': path.resolve(__dirname, 'src/renderer/config'),
       '@renderer': path.resolve(__dirname, 'src/renderer'),
-      // electron-store uses Node.js built-ins (path, fs, crypto) that Vite
-      // stubs out in the browser build, crashing the renderer on startup.
-      // All real token/session storage is in the main process (accessed via IPC),
-      // so the renderer only ever needs a no-op placeholder.
-      'electron-store': path.resolve(__dirname, 'src/renderer/electron-store-stub.ts'),
     },
   },
 
@@ -33,6 +29,15 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       input: path.resolve(__dirname, 'index.html'),
+      // Tell Rollup to leave these as require() calls rather than bundling them.
+      // With nodeIntegration: true in the main window, the renderer can resolve
+      // them at runtime via Electron's Node.js integration.
+      external: [
+        'electron',
+        'electron-store',
+        ...builtinModules,
+        ...builtinModules.map(m => `node:${m}`),
+      ],
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
@@ -52,7 +57,7 @@ export default defineConfig({
   // Make env vars with VITE_ prefix available to renderer
   envPrefix: 'VITE_',
 
-  // Ensure Electron modules are not bundled
+  // Ensure Electron modules are not bundled by the dev-server pre-bundler
   optimizeDeps: {
     exclude: ['electron', 'electron-store'],
   },
