@@ -25,7 +25,6 @@ import { HomePage } from './components/home/HomePage';
 import { useSourceStatus, disconnectSource } from './hooks/useSourceStatus';
 import { UnifiedSearch } from './components/library/UnifiedSearch';
 import { SearchService } from './services/search/SearchService';
-import type { SearchServiceDeps } from './services/search/SearchService';
 import { YouTubeService } from './services/youtube/YouTubeService';
 import { TokenManager } from './services/spotify/TokenManager';
 import { SpotifyAPI } from './services/spotify/SpotifyAPI';
@@ -172,7 +171,11 @@ function SearchPage() {
 
     api.getConfig().then((config: Record<string, string>) => {
       if (cancelled) return;
-      const deps: SearchServiceDeps = {};
+      const deps: {
+        youtubeService?: YouTubeService;
+        spotifyApi?: SpotifyAPI;
+        jellyfinClient?: JellyfinClient;
+      } = {};
       if (config.YOUTUBE_API_KEY) {
         deps.youtubeService = new YouTubeService({
           apiKey: config.YOUTUBE_API_KEY,
@@ -180,8 +183,7 @@ function SearchPage() {
         });
       }
       if (config.SPOTIFY_CLIENT_ID) {
-        const tm = new TokenManager(config.SPOTIFY_CLIENT_ID);
-        deps.spotifyApi = new SpotifyAPI(tm);
+        deps.spotifyApi = new SpotifyAPI(new TokenManager(config.SPOTIFY_CLIENT_ID));
       }
       if (config.JELLYFIN_SERVER_URL) {
         deps.jellyfinClient = new JellyfinClient({
