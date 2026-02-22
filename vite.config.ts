@@ -18,6 +18,11 @@ export default defineConfig({
       '@utils': path.resolve(__dirname, 'src/renderer/utils'),
       '@config': path.resolve(__dirname, 'src/renderer/config'),
       '@renderer': path.resolve(__dirname, 'src/renderer'),
+      // electron-store uses electron.app.getPath() which is main-process-only.
+      // Calling require('electron-store') from the renderer crashes even with
+      // nodeIntegration: true. Replace it with a no-op in-memory stub so Rollup
+      // inlines the stub class and never emits a require('electron-store') call.
+      'electron-store': path.resolve(__dirname, 'src/renderer/electron-store-stub.ts'),
     },
   },
 
@@ -29,12 +34,13 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       input: path.resolve(__dirname, 'index.html'),
-      // Tell Rollup to leave these as require() calls rather than bundling them.
-      // With nodeIntegration: true in the main window, the renderer can resolve
-      // them at runtime via Electron's Node.js integration.
+      // Externalize Node.js built-ins so Rollup emits require('fs') / require('path') /
+      // require('crypto') etc. instead of bundling them with broken browser stubs.
+      // These require() calls resolve correctly at runtime because the main BrowserWindow
+      // has nodeIntegration: true. electron-store is NOT listed here — it is handled by
+      // the resolve.alias stub above to avoid its main-process-only app.getPath() calls.
       external: [
         'electron',
-        'electron-store',
         ...builtinModules,
         ...builtinModules.map(m => `node:${m}`),
       ],
@@ -57,8 +63,8 @@ export default defineConfig({
   // Make env vars with VITE_ prefix available to renderer
   envPrefix: 'VITE_',
 
-  // Ensure Electron modules are not bundled by the dev-server pre-bundler
+  // Exclude electron from dev-server pre-bundling
   optimizeDeps: {
-    exclude: ['electron', 'electron-store'],
+    exclude: ['electron'],
   },
 });
