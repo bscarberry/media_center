@@ -78,8 +78,7 @@ export function HomePage() {
   // Cleanup runs when navigating away so other pages see the plain dark background.
   useEffect(() => {
     if (!bgPhoto) return;
-    document.body.style.backgroundImage =
-      `linear-gradient(rgba(0,0,0,0.58), rgba(0,0,0,0.58)), url(${bgPhoto.urls.regular})`;
+    document.body.style.backgroundImage = `url(${bgPhoto.urls.regular})`;
     document.body.style.backgroundSize = 'cover';
     document.body.style.backgroundPosition = 'center';
     document.body.style.backgroundAttachment = 'fixed';
@@ -196,10 +195,10 @@ function QuickAccessCard({ item, onClick }: { item: QuickAccessItem; onClick: ()
       onMouseLeave={() => setHovered(false)}
       style={{
         ...quickCard,
-        backgroundColor: hovered ? 'rgba(255, 255, 255, 0.12)' : 'rgba(10, 10, 10, 0.45)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        borderColor: hovered ? item.color + '80' : 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: hovered ? 'rgba(28, 28, 28, 0.90)' : 'rgba(12, 12, 12, 0.82)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        borderColor: hovered ? item.color + '80' : 'rgba(255, 255, 255, 0.10)',
         transform: hovered ? 'translateY(-2px)' : 'none',
       }}
     >
@@ -507,10 +506,10 @@ function SectionLink({
       onMouseLeave={() => setHovered(false)}
       style={{
         ...sectionLinkBtn,
-        backgroundColor: hovered ? 'rgba(255, 255, 255, 0.12)' : 'rgba(10, 10, 10, 0.45)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        borderColor: hovered ? color + '80' : 'rgba(255, 255, 255, 0.08)',
+        backgroundColor: hovered ? 'rgba(28, 28, 28, 0.90)' : 'rgba(12, 12, 12, 0.82)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        borderColor: hovered ? color + '80' : 'rgba(255, 255, 255, 0.10)',
       }}
     >
       <span style={{ fontSize: 20 }}>{icon}</span>
@@ -566,12 +565,14 @@ const greetingStyle: CSSProperties = {
   color: '#ffffff',
   margin: 0,
   letterSpacing: '-0.5px',
+  textShadow: '0 2px 12px rgba(0,0,0,0.85)',
 };
 
 const greetingSubtext: CSSProperties = {
   fontSize: 14,
-  color: '#6a6a6a',
+  color: 'rgba(255,255,255,0.55)',
   marginTop: 4,
+  textShadow: '0 1px 6px rgba(0,0,0,0.80)',
 };
 
 const quickAccessSection: CSSProperties = {
@@ -612,11 +613,11 @@ const dashboardGrid: CSSProperties = {
 };
 
 const widgetCard: CSSProperties = {
-  backgroundColor: 'rgba(10, 10, 10, 0.45)',
-  backdropFilter: 'blur(20px)',
-  WebkitBackdropFilter: 'blur(20px)',
+  backgroundColor: 'rgba(12, 12, 12, 0.82)',
+  backdropFilter: 'blur(16px)',
+  WebkitBackdropFilter: 'blur(16px)',
   borderRadius: 12,
-  border: '1px solid rgba(255, 255, 255, 0.08)',
+  border: '1px solid rgba(255, 255, 255, 0.10)',
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column',
