@@ -1833,7 +1833,6 @@ const mainContent: CSSProperties = {
   gridRow: '1 / 2',
   gridColumn: '2 / 3',
   overflow: 'auto',
-  backgroundColor: '#0a0a0a',
 };
 
 const playbackBarStyle: CSSProperties = {
