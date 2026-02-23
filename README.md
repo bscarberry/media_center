@@ -11,6 +11,7 @@ A personal media aggregation desktop app built with Electron, React, TypeScript,
 - **Library & Search** -- Browse and search across all connected sources simultaneously with a unified search interface
 - **Weather Dashboard** -- Current conditions, hourly chart, 7-day forecast, and severe weather alerts via OpenWeatherMap
 - **News Dashboard** -- Category-filtered headlines, article reader, bookmarks, and infinite scroll via NewsAPI
+- **Dynamic Background** -- Dashboard background updates each session with a random nature landscape photo from Unsplash
 - **Widget Framework** -- Resizable, draggable dashboard widgets using react-grid-layout with persistent layout
 - **System Tray** -- Background playback controls (play/pause, next, previous) from the system tray
 - **Cross-Platform** -- Builds for macOS (dmg), Windows (nsis/portable), and Linux (AppImage/deb)
@@ -244,6 +245,32 @@ NEWS_API_KEY=your_news_api_key_here
 |----------|----------|-------------|
 | `NEWS_API_KEY` | Yes | NewsAPI key |
 | `NEWS_COUNTRY` | No | Country code for headlines (default: `us`) |
+
+---
+
+### Unsplash (Dashboard Background)
+
+The home dashboard displays a random nature landscape photo as its background. A new photo is fetched once per app session and cached — Media Hub won't burn through your Unsplash quota.
+
+Unsplash requires attribution for API usage. The photographer's name and an "on Unsplash" link are displayed in the bottom-right corner of the dashboard whenever a photo is shown.
+
+1. Go to [Unsplash Developers](https://unsplash.com/developers)
+2. Click **Your apps** → **New Application**
+3. Accept the API Use and Guidelines terms
+4. Fill in any app name and description
+5. On the application detail page, copy the **Access Key** (not the Secret Key)
+
+Add to `.env`:
+
+```
+UNSPLASH_ACCESS_KEY=your_access_key_here
+```
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `UNSPLASH_ACCESS_KEY` | No | Unsplash API Access Key — omit to use a solid dark background |
+
+> **Free tier:** 50 requests/hour. Since Media Hub fetches one image per session and caches it in `sessionStorage`, even heavy daily use is well within the free limit.
 
 ---
 
