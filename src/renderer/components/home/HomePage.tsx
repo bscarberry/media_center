@@ -72,6 +72,25 @@ export function HomePage() {
     }).catch(() => {});
   }, []);
 
+  // Apply the photo as the document body background. Using document.body directly
+  // is the only reliable approach — position:fixed with negative z-index is invisible
+  // because body has overflow:hidden which creates a stacking context that buries it.
+  // Cleanup runs when navigating away so other pages see the plain dark background.
+  useEffect(() => {
+    if (!bgPhoto) return;
+    document.body.style.backgroundImage =
+      `linear-gradient(rgba(0,0,0,0.58), rgba(0,0,0,0.58)), url(${bgPhoto.urls.regular})`;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundPosition = 'center';
+    document.body.style.backgroundAttachment = 'fixed';
+    return () => {
+      document.body.style.backgroundImage = '';
+      document.body.style.backgroundSize = '';
+      document.body.style.backgroundPosition = '';
+      document.body.style.backgroundAttachment = '';
+    };
+  }, [bgPhoto]);
+
   const quickAccess: QuickAccessItem[] = [
     { id: 'spotify', title: 'Spotify', subtitle: 'Music streaming', icon: '\uD83C\uDFB5', color: '#1db954', route: '/spotify' },
     { id: 'youtube', title: 'YouTube', subtitle: 'Videos & music', icon: '\u25B6\uFE0F', color: '#ff0000', route: '/youtube' },
@@ -81,24 +100,7 @@ export function HomePage() {
 
   return (
     <div style={pageWrapper}>
-      {/* ================================================================= */}
-      {/* Unsplash background image + dark overlay                          */}
-      {/* ================================================================= */}
-      {bgPhoto && (
-        <>
-          <div
-            style={{
-              ...bgImageLayer,
-              backgroundImage: `url(${bgPhoto.urls.regular})`,
-            }}
-          />
-          <div style={bgOverlayLayer} />
-        </>
-      )}
-
-      {/* ================================================================= */}
-      {/* Page content                                                      */}
-      {/* ================================================================= */}
+      {/* Page content */}
       <div style={container}>
         {/* Header / Greeting */}
         <header style={headerSection}>
@@ -527,21 +529,6 @@ const pageWrapper: CSSProperties = {
   minHeight: '100%',
 };
 
-const bgImageLayer: CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  backgroundSize: 'cover',
-  backgroundPosition: 'center',
-  backgroundRepeat: 'no-repeat',
-  zIndex: -2,
-};
-
-const bgOverlayLayer: CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  backgroundColor: 'rgba(0, 0, 0, 0.60)',
-  zIndex: -1,
-};
 
 const attributionBadge: CSSProperties = {
   position: 'fixed',

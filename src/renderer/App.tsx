@@ -1746,7 +1746,8 @@ const appContainer: CSSProperties = {
   height: '100vh',
   width: '100vw',
   overflow: 'hidden',
-  backgroundColor: '#0a0a0a',
+  // No backgroundColor here — body provides #0a0a0a as the base, and HomePage
+  // temporarily overrides it with the Unsplash image via document.body.style.
   fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
 };
 
