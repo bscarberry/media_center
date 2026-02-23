@@ -142,6 +142,12 @@ export class JellyfinClient {
     return this.accessToken !== null && this.userId !== null;
   }
 
+  /** Inject a pre-existing session (e.g. retrieved from the main process). */
+  setSession(accessToken: string, userId: string): void {
+    this.accessToken = accessToken;
+    this.userId = userId;
+  }
+
   /** Clear the stored session. */
   logout(): void {
     this.stopPingLoop();
