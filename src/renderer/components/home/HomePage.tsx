@@ -6,6 +6,15 @@ import React, { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // ---------------------------------------------------------------------------
+// Unsplash photo type
+// ---------------------------------------------------------------------------
+
+interface UnsplashPhoto {
+  urls: { regular: string };
+  user: { name: string; links: { html: string } };
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -24,6 +33,7 @@ interface QuickAccessItem {
 
 export function HomePage() {
   const navigate = useNavigate();
+  const [bgPhoto, setBgPhoto] = useState<UnsplashPhoto | null>(null);
 
   // Greeting based on time of day
   const greeting = useMemo(() => {
@@ -31,6 +41,35 @@ export function HomePage() {
     if (hour < 12) return 'Good morning';
     if (hour < 18) return 'Good afternoon';
     return 'Good evening';
+  }, []);
+
+  // Fetch a random nature photo from Unsplash for the dashboard background.
+  // Results are cached in sessionStorage so we only hit the API once per session.
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.getConfig) return;
+
+    const cached = sessionStorage.getItem('unsplash-bg');
+    if (cached) {
+      try { setBgPhoto(JSON.parse(cached)); return; } catch { /* ignore */ }
+    }
+
+    api.getConfig().then(async (cfg: Record<string, string>) => {
+      if (!cfg.UNSPLASH_ACCESS_KEY) return;
+      try {
+        const res = await fetch(
+          `https://api.unsplash.com/photos/random?query=nature+landscape&orientation=landscape&client_id=${cfg.UNSPLASH_ACCESS_KEY}`,
+        );
+        if (!res.ok) return;
+        const photo = await res.json();
+        const data: UnsplashPhoto = {
+          urls: { regular: photo.urls.regular },
+          user: { name: photo.user.name, links: { html: photo.user.links.html } },
+        };
+        setBgPhoto(data);
+        sessionStorage.setItem('unsplash-bg', JSON.stringify(data));
+      } catch { /* silent – background is optional */ }
+    }).catch(() => {});
   }, []);
 
   const quickAccess: QuickAccessItem[] = [
@@ -41,71 +80,102 @@ export function HomePage() {
   ];
 
   return (
-    <div style={container}>
+    <div style={pageWrapper}>
       {/* ================================================================= */}
-      {/* Header / Greeting                                                 */}
+      {/* Unsplash background image + dark overlay                          */}
       {/* ================================================================= */}
-      <header style={headerSection}>
-        <h1 style={greetingStyle}>{greeting}</h1>
-        <p style={greetingSubtext}>Welcome to Media Hub</p>
-      </header>
-
-      {/* ================================================================= */}
-      {/* Quick Access Cards                                                */}
-      {/* ================================================================= */}
-      <section style={quickAccessSection}>
-        {quickAccess.map((item) => (
-          <QuickAccessCard
-            key={item.id}
-            item={item}
-            onClick={() => navigate(item.route)}
+      {bgPhoto && (
+        <>
+          <div
+            style={{
+              ...bgImageLayer,
+              backgroundImage: `url(${bgPhoto.urls.regular})`,
+            }}
           />
-        ))}
-      </section>
+          <div style={bgOverlayLayer} />
+        </>
+      )}
 
       {/* ================================================================= */}
-      {/* Main Dashboard Grid                                               */}
+      {/* Page content                                                      */}
       {/* ================================================================= */}
-      <div style={dashboardGrid}>
-        {/* Now Playing / Recently Played */}
-        <NowPlayingCard />
+      <div style={container}>
+        {/* Header / Greeting */}
+        <header style={headerSection}>
+          <h1 style={greetingStyle}>{greeting}</h1>
+          <p style={greetingSubtext}>Welcome to Media Hub</p>
+        </header>
 
-        {/* Weather Widget */}
-        <WeatherCard />
+        {/* Quick Access Cards */}
+        <section style={quickAccessSection}>
+          {quickAccess.map((item) => (
+            <QuickAccessCard
+              key={item.id}
+              item={item}
+              onClick={() => navigate(item.route)}
+            />
+          ))}
+        </section>
 
-        {/* News Widget */}
-        <NewsCard />
+        {/* Main Dashboard Grid */}
+        <div style={dashboardGrid}>
+          <NowPlayingCard />
+          <WeatherCard />
+          <NewsCard />
+          <DiscoverCard onNavigate={(route) => navigate(route)} />
+        </div>
 
-        {/* Discover / Browse Section */}
-        <DiscoverCard onNavigate={(route) => navigate(route)} />
+        {/* Section Links */}
+        <section style={sectionLinksRow}>
+          <SectionLink
+            title="Weather"
+            icon={'\u2601\uFE0F'}
+            description="Forecast & alerts"
+            color="#4fc3f7"
+            onClick={() => navigate('/weather')}
+          />
+          <SectionLink
+            title="News"
+            icon={'\uD83D\uDCF0'}
+            description="Headlines & trending"
+            color="#ff9800"
+            onClick={() => navigate('/news')}
+          />
+          <SectionLink
+            title="Settings"
+            icon={'\u2699\uFE0F'}
+            description="Configure services"
+            color="#6a6a6a"
+            onClick={() => navigate('/settings')}
+          />
+        </section>
       </div>
 
       {/* ================================================================= */}
-      {/* Section Links                                                     */}
+      {/* Unsplash attribution (required by Unsplash API guidelines)        */}
       {/* ================================================================= */}
-      <section style={sectionLinksRow}>
-        <SectionLink
-          title="Weather"
-          icon={'\u2601\uFE0F'}
-          description="Forecast & alerts"
-          color="#4fc3f7"
-          onClick={() => navigate('/weather')}
-        />
-        <SectionLink
-          title="News"
-          icon={'\uD83D\uDCF0'}
-          description="Headlines & trending"
-          color="#ff9800"
-          onClick={() => navigate('/news')}
-        />
-        <SectionLink
-          title="Settings"
-          icon={'\u2699\uFE0F'}
-          description="Configure services"
-          color="#6a6a6a"
-          onClick={() => navigate('/settings')}
-        />
-      </section>
+      {bgPhoto && (
+        <div style={attributionBadge}>
+          Photo by{' '}
+          <a
+            href={`${bgPhoto.user.links.html}?utm_source=media_hub&utm_medium=referral`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={attrLink}
+          >
+            {bgPhoto.user.name}
+          </a>
+          {' '}on{' '}
+          <a
+            href="https://unsplash.com/?utm_source=media_hub&utm_medium=referral"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={attrLink}
+          >
+            Unsplash
+          </a>
+        </div>
+      )}
     </div>
   );
 }
@@ -124,7 +194,8 @@ function QuickAccessCard({ item, onClick }: { item: QuickAccessItem; onClick: ()
       onMouseLeave={() => setHovered(false)}
       style={{
         ...quickCard,
-        backgroundColor: hovered ? '#2a2a2a' : '#181818',
+        backgroundColor: hovered ? 'rgba(36, 36, 36, 0.96)' : 'rgba(18, 18, 18, 0.88)',
+        backdropFilter: 'blur(6px)',
         borderColor: hovered ? item.color + '60' : '#282828',
         transform: hovered ? 'translateY(-2px)' : 'none',
       }}
@@ -433,7 +504,8 @@ function SectionLink({
       onMouseLeave={() => setHovered(false)}
       style={{
         ...sectionLinkBtn,
-        backgroundColor: hovered ? '#2a2a2a' : '#181818',
+        backgroundColor: hovered ? 'rgba(36, 36, 36, 0.96)' : 'rgba(18, 18, 18, 0.88)',
+        backdropFilter: 'blur(6px)',
         borderColor: hovered ? color + '40' : '#282828',
       }}
     >
@@ -450,10 +522,49 @@ function SectionLink({
 // Styles
 // ---------------------------------------------------------------------------
 
+const pageWrapper: CSSProperties = {
+  position: 'relative',
+  minHeight: '100%',
+};
+
+const bgImageLayer: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  backgroundSize: 'cover',
+  backgroundPosition: 'center',
+  backgroundRepeat: 'no-repeat',
+  zIndex: -2,
+};
+
+const bgOverlayLayer: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  backgroundColor: 'rgba(0, 0, 0, 0.60)',
+  zIndex: -1,
+};
+
+const attributionBadge: CSSProperties = {
+  position: 'fixed',
+  bottom: 16,
+  right: 16,
+  fontSize: 10,
+  color: 'rgba(255, 255, 255, 0.40)',
+  zIndex: 10,
+  pointerEvents: 'none',
+};
+
+const attrLink: CSSProperties = {
+  color: 'rgba(255, 255, 255, 0.55)',
+  textDecoration: 'none',
+  pointerEvents: 'auto',
+};
+
 const container: CSSProperties = {
   padding: '24px 32px 120px',
   maxWidth: 1200,
   margin: '0 auto',
+  position: 'relative',
+  zIndex: 1,
 };
 
 const headerSection: CSSProperties = {
@@ -512,7 +623,8 @@ const dashboardGrid: CSSProperties = {
 };
 
 const widgetCard: CSSProperties = {
-  backgroundColor: '#181818',
+  backgroundColor: 'rgba(18, 18, 18, 0.92)',
+  backdropFilter: 'blur(6px)',
   borderRadius: 12,
   border: '1px solid #282828',
   overflow: 'hidden',

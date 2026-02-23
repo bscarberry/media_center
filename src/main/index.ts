@@ -358,6 +358,7 @@ function setupIPC(): void {
       WEATHER_UNIT: process.env.WEATHER_UNIT || 'fahrenheit',
       NEWS_API_KEY: process.env.NEWS_API_KEY || '',
       TWITTER_BEARER_TOKEN: process.env.TWITTER_BEARER_TOKEN || '',
+      UNSPLASH_ACCESS_KEY: process.env.UNSPLASH_ACCESS_KEY || '',
     };
   });
 
