@@ -58,6 +58,16 @@ const electronAPI = {
     profile: any;
   }>,
 
+  // Spotify – return a valid access token (refreshed if needed) for renderer search
+  spotifyGetToken: () => ipcRenderer.invoke('spotify:get-access-token') as Promise<{
+    accessToken: string; refreshToken: string; expiresAt: number;
+  } | null>,
+
+  // Jellyfin – return stored session credentials for renderer search
+  jellyfinGetSession: () => ipcRenderer.invoke('jellyfin:get-session') as Promise<{
+    accessToken: string; userId: string; serverUrl: string;
+  } | null>,
+
   // Jellyfin – fetch recently added + resume items for the Jellyfin content page
   jellyfinGetContent: () => ipcRenderer.invoke('jellyfin:get-content') as Promise<{
     recentItems: any[];

@@ -651,15 +651,53 @@ function setupIPC(): void {
   });
 
   // -------------------------------------------------------------------------
+  // Spotify – token refresh helper (main-process only)
+  // -------------------------------------------------------------------------
+
+  async function refreshSpotifyTokens(tokens: { accessToken: string; refreshToken: string; expiresAt: number }) {
+    const clientId = process.env.SPOTIFY_CLIENT_ID;
+    if (!clientId) throw new Error('SPOTIFY_CLIENT_ID not set');
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: tokens.refreshToken,
+      client_id: clientId,
+    });
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    });
+    if (!res.ok) throw new Error(`Spotify token refresh failed: ${res.status}`);
+    const data: any = await res.json();
+    const fresh = {
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token ?? tokens.refreshToken,
+      expiresAt: Date.now() + data.expires_in * 1000,
+    };
+    getSpotifyStore().set('spotifyTokens', fresh);
+    return fresh;
+  }
+
+  async function getValidSpotifyToken(): Promise<string> {
+    const stored = getSpotifyStore().get('spotifyTokens') as {
+      accessToken: string; refreshToken: string; expiresAt: number;
+    } | null;
+    if (!stored?.accessToken) throw new Error('Not authenticated with Spotify');
+    // Refresh if expiring within 5 minutes
+    if (Date.now() >= stored.expiresAt - 5 * 60_000) {
+      const fresh = await refreshSpotifyTokens(stored);
+      return fresh.accessToken;
+    }
+    return stored.accessToken;
+  }
+
+  // -------------------------------------------------------------------------
   // Spotify – fetch library content (playlists + top tracks) for the content page
   // -------------------------------------------------------------------------
 
   ipcMain.handle('spotify:get-content', async () => {
-    const tokens = getSpotifyStore().get('spotifyTokens') as {
-      accessToken: string; refreshToken: string; expiresAt: number;
-    } | null;
-    if (!tokens?.accessToken) throw new Error('Not authenticated with Spotify');
-    const headers = { Authorization: `Bearer ${tokens.accessToken}` };
+    const accessToken = await getValidSpotifyToken();
+    const headers = { Authorization: `Bearer ${accessToken}` };
     const [playlistsRes, topTracksRes, profileRes] = await Promise.all([
       fetch('https://api.spotify.com/v1/me/playlists?limit=20', { headers }),
       fetch('https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=10', { headers }),
@@ -669,6 +707,43 @@ function setupIPC(): void {
     const topTracks = topTracksRes.ok ? ((await topTracksRes.json()) as any).items ?? [] : [];
     const profile = profileRes.ok ? (await profileRes.json()) as any : null;
     return { playlists, topTracks, profile };
+  });
+
+  // -------------------------------------------------------------------------
+  // Spotify – return a valid access token for renderer-side API calls (search)
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('spotify:get-access-token', async () => {
+    try {
+      const stored = getSpotifyStore().get('spotifyTokens') as {
+        accessToken: string; refreshToken: string; expiresAt: number;
+      } | null;
+      if (!stored?.accessToken) return null;
+      if (Date.now() >= stored.expiresAt - 5 * 60_000) {
+        const fresh = await refreshSpotifyTokens(stored);
+        return { accessToken: fresh.accessToken, refreshToken: fresh.refreshToken, expiresAt: fresh.expiresAt };
+      }
+      return { accessToken: stored.accessToken, refreshToken: stored.refreshToken, expiresAt: stored.expiresAt };
+    } catch {
+      return null;
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Jellyfin – return stored session for renderer-side API calls (search)
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('jellyfin:get-session', () => {
+    try {
+      const session = getJellyfinStore().get('jellyfinSession') as {
+        accessToken: string; userId: string; serverId: string;
+      } | null;
+      if (!session?.accessToken) return null;
+      const serverUrl = (process.env.JELLYFIN_SERVER_URL || session.serverId || '').replace(/\/$/, '');
+      return { accessToken: session.accessToken, userId: session.userId, serverUrl };
+    } catch {
+      return null;
+    }
   });
 
   // -------------------------------------------------------------------------

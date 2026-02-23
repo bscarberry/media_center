@@ -169,7 +169,12 @@ function SearchPage() {
       return;
     }
 
-    api.getConfig().then((config: Record<string, string>) => {
+    Promise.all([
+      api.getConfig(),
+      api.spotifyGetToken?.() ?? Promise.resolve(null),
+      api.jellyfinGetSession?.() ?? Promise.resolve(null),
+    ] as [Promise<Record<string, string>>, Promise<{ accessToken: string; refreshToken: string; expiresAt: number } | null>, Promise<{ accessToken: string; userId: string; serverUrl: string } | null>])
+    .then(([config, spotifyToken, jellyfinSession]) => {
       if (cancelled) return;
       const deps: {
         youtubeService?: YouTubeService;
@@ -182,17 +187,21 @@ function SearchPage() {
           playbackMode: (config.YOUTUBE_PLAYBACK_MODE as 'iframe' | 'extract') || 'iframe',
         });
       }
-      if (config.SPOTIFY_CLIENT_ID) {
-        deps.spotifyApi = new SpotifyAPI(new TokenManager(config.SPOTIFY_CLIENT_ID));
+      if (config.SPOTIFY_CLIENT_ID && spotifyToken) {
+        const tokenMgr = new TokenManager(config.SPOTIFY_CLIENT_ID);
+        tokenMgr.updateTokens(spotifyToken);
+        deps.spotifyApi = new SpotifyAPI(tokenMgr);
       }
-      if (config.JELLYFIN_SERVER_URL) {
-        deps.jellyfinClient = new JellyfinClient({
-          serverUrl: config.JELLYFIN_SERVER_URL,
+      if (jellyfinSession?.serverUrl) {
+        const jfClient = new JellyfinClient({
+          serverUrl: jellyfinSession.serverUrl,
           transcodeQuality: 'high',
           enableTranscoding: false,
           cacheDirectory: '',
           maxCacheSize: 0,
         });
+        jfClient.setSession(jellyfinSession.accessToken, jellyfinSession.userId);
+        deps.jellyfinClient = jfClient;
       }
       setSearchService(new SearchService(deps));
       setLoading(false);
