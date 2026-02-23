@@ -1231,26 +1231,57 @@ function TwitterPage() {
   } | null>>(TWITTER_ACCOUNTS.map(() => null));
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<(string | null)[]>(TWITTER_ACCOUNTS.map(() => null));
+  const [bgPhoto, setBgPhoto] = useState<{ urls: { regular: string }; user: { name: string; links: { html: string } } } | null>(null);
 
   useEffect(() => {
     const api = (window as any).electronAPI;
     if (!api?.getConfig) return;
-    api.getConfig().then((cfg: Record<string, string>) => {
+    api.getConfig().then(async (cfg: Record<string, string>) => {
+      // Load tweets
       const token = cfg.TWITTER_BEARER_TOKEN || '';
       setBearerToken(token);
-      if (!token) return;
-      setLoading(true);
-      Promise.allSettled(
-        TWITTER_ACCOUNTS.map((username) =>
-          api.twitterGetUserTweets({ bearerToken: token, username, maxResults: 50 }),
-        ),
-      ).then((settled) => {
-        setResults(settled.map((r) => (r.status === 'fulfilled' ? (r as PromiseFulfilledResult<any>).value : null)));
-        setErrors(settled.map((r) => (r.status === 'rejected' ? (r as PromiseRejectedResult).reason?.message ?? 'Error' : null)));
-        setLoading(false);
-      });
+      if (token) {
+        setLoading(true);
+        Promise.allSettled(
+          TWITTER_ACCOUNTS.map((username) =>
+            api.twitterGetUserTweets({ bearerToken: token, username, maxResults: 50 }),
+          ),
+        ).then((settled) => {
+          setResults(settled.map((r) => (r.status === 'fulfilled' ? (r as PromiseFulfilledResult<any>).value : null)));
+          setErrors(settled.map((r) => (r.status === 'rejected' ? (r as PromiseRejectedResult).reason?.message ?? 'Error' : null)));
+          setLoading(false);
+        });
+      }
+      // Load background (serve from session cache first, then API)
+      if (!cfg.UNSPLASH_ACCESS_KEY) return;
+      const cached = sessionStorage.getItem('unsplash-bg');
+      if (cached) { try { setBgPhoto(JSON.parse(cached)); return; } catch { /* ignore */ } }
+      try {
+        const res = await fetch(
+          `https://api.unsplash.com/photos/random?query=nature+landscape&orientation=landscape&client_id=${cfg.UNSPLASH_ACCESS_KEY}`,
+        );
+        if (!res.ok) return;
+        const photo = await res.json();
+        const data = { urls: { regular: photo.urls.regular }, user: { name: photo.user.name, links: { html: photo.user.links.html } } };
+        setBgPhoto(data);
+        sessionStorage.setItem('unsplash-bg', JSON.stringify(data));
+      } catch { /* silent */ }
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!bgPhoto) return;
+    document.body.style.backgroundImage = `url(${bgPhoto.urls.regular})`;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundPosition = 'center';
+    document.body.style.backgroundAttachment = 'fixed';
+    return () => {
+      document.body.style.backgroundImage = '';
+      document.body.style.backgroundSize = '';
+      document.body.style.backgroundPosition = '';
+      document.body.style.backgroundAttachment = '';
+    };
+  }, [bgPhoto]);
 
   const openTweet = useCallback((username: string, tweetId: string) => {
     (window as any).electronAPI?.openExternal?.(`https://twitter.com/${username}/status/${tweetId}`);
@@ -1264,13 +1295,16 @@ function TwitterPage() {
     gap: 20,
   };
   const columnStyle: CSSProperties = {
-    background: 'rgba(255,255,255,0.04)',
+    background: 'rgba(5, 5, 5, 0.25)',
+    backdropFilter: 'blur(24px)',
+    WebkitBackdropFilter: 'blur(24px)',
     borderRadius: 12,
     padding: 16,
-    border: '1px solid rgba(255,255,255,0.08)',
+    border: '1px solid rgba(255,255,255,0.12)',
   };
   const tweetCardStyle: CSSProperties = {
-    background: 'rgba(255,255,255,0.06)',
+    background: 'rgba(255, 255, 255, 0.07)',
+    backdropFilter: 'blur(8px)',
     borderRadius: 8,
     padding: '12px 14px',
     marginBottom: 10,
@@ -1286,39 +1320,42 @@ function TwitterPage() {
     fontSize: 11,
     color: 'rgba(255,255,255,0.45)',
   };
+  const attrStyle: CSSProperties = {
+    position: 'fixed', bottom: 16, right: 16, fontSize: 10,
+    color: 'rgba(255,255,255,0.40)', zIndex: 10, pointerEvents: 'none',
+  };
+  const attrLinkStyle: CSSProperties = {
+    color: 'rgba(255,255,255,0.55)', textDecoration: 'none', pointerEvents: 'auto',
+  };
 
   if (!bearerToken && !loading) {
     return (
       <div style={pageStyle}>
         <div style={headerStyle}>
           <span style={{ fontSize: 28 }}>{'\uD83D\uDC26'}</span>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Twitter / X</h2>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}>Twitter / X</h2>
         </div>
         <div style={{
-          padding: '20px 24px',
-          borderRadius: 10,
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          color: 'rgba(255,255,255,0.6)',
-          fontSize: 14,
+          padding: '20px 24px', borderRadius: 10,
+          background: 'rgba(5,5,5,0.25)', backdropFilter: 'blur(24px)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          color: 'rgba(255,255,255,0.6)', fontSize: 14,
         }}>
           Add{' '}
-          <code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>
-            TWITTER_BEARER_TOKEN
-          </code>{' '}
+          <code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>TWITTER_BEARER_TOKEN</code>{' '}
           to your{' '}
-          <code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>
-            .env
-          </code>{' '}
+          <code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>.env</code>{' '}
           to load tweets. Get a Bearer Token from the{' '}
-          <span
-            style={{ color: '#1DA1F2', cursor: 'pointer', textDecoration: 'underline' }}
-            onClick={() => (window as any).electronAPI?.openExternal?.('https://developer.twitter.com/en/portal/dashboard')}
-          >
+          <span style={{ color: '#1DA1F2', cursor: 'pointer', textDecoration: 'underline' }}
+            onClick={() => (window as any).electronAPI?.openExternal?.('https://developer.twitter.com/en/portal/dashboard')}>
             Twitter Developer Portal
-          </span>
-          .
+          </span>.
         </div>
+        {bgPhoto && (
+          <div style={attrStyle}>
+            Photo by <a href={`${bgPhoto.user.links.html}?utm_source=media_hub&utm_medium=referral`} target="_blank" rel="noopener noreferrer" style={attrLinkStyle}>{bgPhoto.user.name}</a>{' '}on <a href="https://unsplash.com/?utm_source=media_hub&utm_medium=referral" target="_blank" rel="noopener noreferrer" style={attrLinkStyle}>Unsplash</a>
+          </div>
+        )}
       </div>
     );
   }
@@ -1327,7 +1364,7 @@ function TwitterPage() {
     <div style={pageStyle}>
       <div style={headerStyle}>
         <span style={{ fontSize: 28 }}>{'\uD83D\uDC26'}</span>
-        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Twitter / X</h2>
+        <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600, textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}>Twitter / X</h2>
         {loading && <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>Loading…</span>}
       </div>
 
@@ -1412,6 +1449,12 @@ function TwitterPage() {
           );
         })}
       </div>
+
+      {bgPhoto && (
+        <div style={attrStyle}>
+          Photo by <a href={`${bgPhoto.user.links.html}?utm_source=media_hub&utm_medium=referral`} target="_blank" rel="noopener noreferrer" style={attrLinkStyle}>{bgPhoto.user.name}</a>{' '}on <a href="https://unsplash.com/?utm_source=media_hub&utm_medium=referral" target="_blank" rel="noopener noreferrer" style={attrLinkStyle}>Unsplash</a>
+        </div>
+      )}
     </div>
   );
 }
