@@ -196,9 +196,10 @@ function QuickAccessCard({ item, onClick }: { item: QuickAccessItem; onClick: ()
       onMouseLeave={() => setHovered(false)}
       style={{
         ...quickCard,
-        backgroundColor: hovered ? 'rgba(36, 36, 36, 0.96)' : 'rgba(18, 18, 18, 0.88)',
-        backdropFilter: 'blur(6px)',
-        borderColor: hovered ? item.color + '60' : '#282828',
+        backgroundColor: hovered ? 'rgba(255, 255, 255, 0.12)' : 'rgba(10, 10, 10, 0.45)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderColor: hovered ? item.color + '80' : 'rgba(255, 255, 255, 0.08)',
         transform: hovered ? 'translateY(-2px)' : 'none',
       }}
     >
@@ -464,7 +465,7 @@ function DiscoverCard({ onNavigate }: { onNavigate: (route: string) => void }) {
               onMouseLeave={() => setHoveredIdx(null)}
               style={{
                 ...discoverRow,
-                backgroundColor: hoveredIdx === i ? '#2a2a2a' : 'transparent',
+                backgroundColor: hoveredIdx === i ? 'rgba(255, 255, 255, 0.09)' : 'transparent',
               }}
             >
               <div style={{ ...discoverIcon, backgroundColor: item.color + '20' }}>
@@ -506,9 +507,10 @@ function SectionLink({
       onMouseLeave={() => setHovered(false)}
       style={{
         ...sectionLinkBtn,
-        backgroundColor: hovered ? 'rgba(36, 36, 36, 0.96)' : 'rgba(18, 18, 18, 0.88)',
-        backdropFilter: 'blur(6px)',
-        borderColor: hovered ? color + '40' : '#282828',
+        backgroundColor: hovered ? 'rgba(255, 255, 255, 0.12)' : 'rgba(10, 10, 10, 0.45)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        borderColor: hovered ? color + '80' : 'rgba(255, 255, 255, 0.08)',
       }}
     >
       <span style={{ fontSize: 20 }}>{icon}</span>
@@ -585,7 +587,7 @@ const quickCard: CSSProperties = {
   gap: 12,
   padding: '12px 16px',
   borderRadius: 8,
-  border: '1px solid #282828',
+  border: '1px solid rgba(255, 255, 255, 0.08)',
   cursor: 'pointer',
   transition: 'all 200ms ease',
   background: 'none',
@@ -610,10 +612,11 @@ const dashboardGrid: CSSProperties = {
 };
 
 const widgetCard: CSSProperties = {
-  backgroundColor: 'rgba(18, 18, 18, 0.92)',
-  backdropFilter: 'blur(6px)',
+  backgroundColor: 'rgba(10, 10, 10, 0.45)',
+  backdropFilter: 'blur(20px)',
+  WebkitBackdropFilter: 'blur(20px)',
   borderRadius: 12,
-  border: '1px solid #282828',
+  border: '1px solid rgba(255, 255, 255, 0.08)',
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column',
@@ -625,7 +628,7 @@ const widgetHeader: CSSProperties = {
   alignItems: 'center',
   gap: 8,
   padding: '12px 16px',
-  borderBottom: '1px solid #282828',
+  borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
   flexShrink: 0,
 };
 
@@ -666,7 +669,7 @@ const trackArtwork: CSSProperties = {
   height: 40,
   borderRadius: 4,
   overflow: 'hidden',
-  backgroundColor: '#282828',
+  backgroundColor: 'rgba(255, 255, 255, 0.07)',
   flexShrink: 0,
   display: 'flex',
   alignItems: 'center',
@@ -715,7 +718,7 @@ const weatherDetailItem: CSSProperties = {
   gap: 2,
   fontSize: 12,
   padding: '8px',
-  backgroundColor: '#242424',
+  backgroundColor: 'rgba(255, 255, 255, 0.07)',
   borderRadius: 6,
 };
 
@@ -755,7 +758,7 @@ const sectionLinkBtn: CSSProperties = {
   gap: 12,
   padding: '16px',
   borderRadius: 8,
-  border: '1px solid #282828',
+  border: '1px solid rgba(255, 255, 255, 0.08)',
   cursor: 'pointer',
   transition: 'all 200ms ease',
   background: 'none',
