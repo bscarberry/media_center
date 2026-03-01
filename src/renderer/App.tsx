@@ -33,6 +33,12 @@ import { WeatherService, weatherConditionIcon } from './services/weather/Weather
 import { timeAgo, categoryLabel } from './services/news/NewsService';
 import type { WeatherData, WeatherLocation, NewsCategory } from './types/dashboard';
 import { NEWS_CATEGORIES } from './types/dashboard';
+import { UnifiedMediaRouter } from './services/player/MediaRouter';
+import { SpotifyPlayerStrategy } from './services/player/SpotifyPlayerStrategy';
+import { createPlayerStore } from './stores/playerStore';
+import { PlayerStoreContext, usePlayerStore } from './components/player/usePlayerStore';
+import { PlaybackBar } from './components/player/PlaybackBar';
+import { MediaSourceType, type MediaTrack } from './types/media';
 
 // ---------------------------------------------------------------------------
 // Providers & Stores
@@ -393,11 +399,30 @@ function ServicePage({
   );
 }
 
+/** Convert a raw Spotify track (from the REST API) to a MediaTrack. */
+function spotifyTrackToMediaTrack(track: any): MediaTrack {
+  return {
+    id: `spotify:${track.id}`,
+    sourceType: MediaSourceType.SPOTIFY,
+    sourceId: track.uri, // e.g. "spotify:track:xxx"
+    title: track.name,
+    artist: track.artists?.map((a: any) => a.name).join(', ') ?? 'Unknown',
+    album: track.album?.name,
+    duration: track.duration_ms ?? 0,
+    artwork: track.album?.images?.[0]?.url ?? null,
+    isPlayable: true,
+    requiresAuth: true,
+  };
+}
+
 function SpotifyPage() {
   const { status, loading: statusLoading, refresh } = useSourceStatus();
   const [content, setContent] = useState<{ playlists: any[]; topTracks: any[]; profile: any } | null>(null);
   const [contentLoading, setContentLoading] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
+  const [loadingPlaylistId, setLoadingPlaylistId] = useState<string | null>(null);
+  const { playQueue } = usePlayerStore();
+  const spotifyApiRef = useRef<SpotifyAPI | null>(null);
 
   useEffect(() => {
     if (!status.spotify) return;
@@ -410,9 +435,51 @@ function SpotifyPage() {
       .catch((err: any) => { setContentError(err?.message ?? 'Failed to load Spotify content'); setContentLoading(false); });
   }, [status.spotify]);
 
-  const open = useCallback((url: string) => {
-    (window as any).electronAPI?.openExternal?.(url);
-  }, []);
+  // Create a SpotifyAPI instance for fetching playlist tracks
+  useEffect(() => {
+    if (!status.spotify || spotifyApiRef.current) return;
+    const api = (window as any).electronAPI;
+    if (!api?.getConfig || !api?.spotifyGetToken) return;
+    (async () => {
+      try {
+        const [config, token] = await Promise.all([
+          api.getConfig() as Promise<Record<string, string>>,
+          api.spotifyGetToken() as Promise<{ accessToken: string; refreshToken: string; expiresAt: number } | null>,
+        ]);
+        if (config.SPOTIFY_CLIENT_ID && token) {
+          const tokenMgr = new TokenManager(config.SPOTIFY_CLIENT_ID);
+          tokenMgr.updateTokens(token);
+          spotifyApiRef.current = new SpotifyAPI(tokenMgr);
+        }
+      } catch { /* ignore */ }
+    })();
+  }, [status.spotify]);
+
+  /** Play all top tracks starting from the clicked index. */
+  const handlePlayTrack = useCallback((tracks: any[], index: number) => {
+    const mediaTracks = tracks.map(spotifyTrackToMediaTrack);
+    playQueue(mediaTracks, index);
+  }, [playQueue]);
+
+  /** Fetch playlist tracks from the API then queue them all. */
+  const handlePlayPlaylist = useCallback(async (playlistId: string) => {
+    const api = spotifyApiRef.current;
+    if (!api) return;
+    setLoadingPlaylistId(playlistId);
+    try {
+      const result = await api.getPlaylistTracks(playlistId, 100, 0);
+      const mediaTracks = (result.items ?? [])
+        .filter((item: any) => item.track)
+        .map((item: any) => spotifyTrackToMediaTrack(item.track));
+      if (mediaTracks.length > 0) {
+        await playQueue(mediaTracks, 0);
+      }
+    } catch (err: any) {
+      setContentError(err?.message ?? 'Failed to load playlist tracks');
+    } finally {
+      setLoadingPlaylistId(null);
+    }
+  }, [playQueue]);
 
   const pg: CSSProperties = { padding: 24, height: '100%', overflowY: 'auto', boxSizing: 'border-box' };
   const hdr: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 };
@@ -462,7 +529,7 @@ function SpotifyPage() {
               {content.topTracks.map((track: any, i: number) => (
                 <div
                   key={track.id}
-                  onClick={() => open(track.external_urls?.spotify)}
+                  onClick={() => handlePlayTrack(content.topTracks, i)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px',
                     borderRadius: 8, cursor: 'pointer', marginBottom: 4,
@@ -496,8 +563,8 @@ function SpotifyPage() {
                 {content.playlists.map((pl: any) => (
                   <div
                     key={pl.id}
-                    style={card}
-                    onClick={() => open(pl.external_urls?.spotify)}
+                    style={{ ...card, opacity: loadingPlaylistId === pl.id ? 0.6 : 1 }}
+                    onClick={() => loadingPlaylistId ? null : handlePlayPlaylist(pl.id)}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.09)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)'; }}
                   >
@@ -508,7 +575,9 @@ function SpotifyPage() {
                       }
                     </div>
                     <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pl.name}</div>
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>{pl.tracks?.total ?? 0} tracks</div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
+                      {loadingPlaylistId === pl.id ? 'Loading…' : `${pl.tracks?.total ?? 0} tracks`}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1712,35 +1781,78 @@ function AppLayout() {
     })();
   }, []);
 
+  // ---------------------------------------------------------------------------
+  // Media player: router, strategy registration, and store
+  // ---------------------------------------------------------------------------
+
+  const playerStoreRef = useRef<ReturnType<typeof createPlayerStore> | null>(null);
+  const routerRef = useRef<UnifiedMediaRouter | null>(null);
+
+  if (!routerRef.current) {
+    routerRef.current = new UnifiedMediaRouter();
+  }
+
+  if (!playerStoreRef.current) {
+    playerStoreRef.current = createPlayerStore(routerRef.current);
+  }
+
+  // Lazily register the Spotify strategy once tokens are available
+  const spotifyRegistered = useRef(false);
+  useEffect(() => {
+    if (spotifyRegistered.current) return;
+    const api = (window as any).electronAPI;
+    if (!api?.getConfig || !api?.spotifyGetToken) return;
+
+    (async () => {
+      try {
+        const [config, token] = await Promise.all([
+          api.getConfig() as Promise<Record<string, string>>,
+          api.spotifyGetToken() as Promise<{ accessToken: string; refreshToken: string; expiresAt: number } | null>,
+        ]);
+        if (config.SPOTIFY_CLIENT_ID && token && routerRef.current) {
+          const tokenMgr = new TokenManager(config.SPOTIFY_CLIENT_ID);
+          tokenMgr.updateTokens(token);
+          const strategy = new SpotifyPlayerStrategy({ tokenManager: tokenMgr });
+          routerRef.current.registerStrategy(strategy);
+          spotifyRegistered.current = true;
+        }
+      } catch {
+        // Tokens not available yet — strategy will be registered on next connect
+      }
+    })();
+  }, []);
+
   return (
-    <div style={appContainer}>
-      {/* Sidebar */}
-      <Sidebar />
+    <PlayerStoreContext.Provider value={playerStoreRef.current}>
+      <div style={appContainer}>
+        {/* Sidebar */}
+        <Sidebar />
 
-      {/* Main content */}
-      <main style={mainContent}>
-        <ErrorBoundary>
-          <React.Suspense fallback={<PageSkeleton />}>
-            <Routes>
-              <Route path="/home" element={<HomePage />} />
-              <Route path="/search" element={<SearchPage />} />
-              <Route path="/library" element={<LibraryPage />} />
-              <Route path="/spotify" element={<SpotifyPage />} />
-              <Route path="/youtube" element={<YouTubePage />} />
-              <Route path="/jellyfin" element={<JellyfinPage />} />
-              <Route path="/twitter" element={<TwitterPage />} />
-              <Route path="/weather" element={<WeatherPage />} />
-              <Route path="/news" element={<NewsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="*" element={<Navigate to="/home" replace />} />
-            </Routes>
-          </React.Suspense>
-        </ErrorBoundary>
-      </main>
+        {/* Main content */}
+        <main style={mainContent}>
+          <ErrorBoundary>
+            <React.Suspense fallback={<PageSkeleton />}>
+              <Routes>
+                <Route path="/home" element={<HomePage />} />
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="/library" element={<LibraryPage />} />
+                <Route path="/spotify" element={<SpotifyPage />} />
+                <Route path="/youtube" element={<YouTubePage />} />
+                <Route path="/jellyfin" element={<JellyfinPage />} />
+                <Route path="/twitter" element={<TwitterPage />} />
+                <Route path="/weather" element={<WeatherPage />} />
+                <Route path="/news" element={<NewsPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="*" element={<Navigate to="/home" replace />} />
+              </Routes>
+            </React.Suspense>
+          </ErrorBoundary>
+        </main>
 
-      {/* Playback bar (bottom) */}
-      <PlaybackBarPlaceholder />
-    </div>
+        {/* Playback bar (bottom) */}
+        <PlaybackBar />
+      </div>
+    </PlayerStoreContext.Provider>
   );
 }
 
