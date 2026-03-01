@@ -422,7 +422,6 @@ function SpotifyPage() {
   const [contentError, setContentError] = useState<string | null>(null);
   const [loadingPlaylistId, setLoadingPlaylistId] = useState<string | null>(null);
   const { playQueue } = usePlayerStore();
-  const spotifyApiRef = useRef<SpotifyAPI | null>(null);
 
   useEffect(() => {
     if (!status.spotify) return;
@@ -435,42 +434,23 @@ function SpotifyPage() {
       .catch((err: any) => { setContentError(err?.message ?? 'Failed to load Spotify content'); setContentLoading(false); });
   }, [status.spotify]);
 
-  // Create a SpotifyAPI instance for fetching playlist tracks
-  useEffect(() => {
-    if (!status.spotify || spotifyApiRef.current) return;
-    const api = (window as any).electronAPI;
-    if (!api?.getConfig || !api?.spotifyGetToken) return;
-    (async () => {
-      try {
-        const [config, token] = await Promise.all([
-          api.getConfig() as Promise<Record<string, string>>,
-          api.spotifyGetToken() as Promise<{ accessToken: string; refreshToken: string; expiresAt: number } | null>,
-        ]);
-        if (config.SPOTIFY_CLIENT_ID && token) {
-          const tokenMgr = new TokenManager(config.SPOTIFY_CLIENT_ID);
-          tokenMgr.updateTokens(token);
-          spotifyApiRef.current = new SpotifyAPI(tokenMgr);
-        }
-      } catch { /* ignore */ }
-    })();
-  }, [status.spotify]);
-
   /** Play all top tracks starting from the clicked index. */
   const handlePlayTrack = useCallback((tracks: any[], index: number) => {
     const mediaTracks = tracks.map(spotifyTrackToMediaTrack);
     playQueue(mediaTracks, index);
   }, [playQueue]);
 
-  /** Fetch playlist tracks from the API then queue them all. */
+  /** Fetch playlist tracks via the main process (avoids renderer-side token issues) then queue them. */
   const handlePlayPlaylist = useCallback(async (playlistId: string) => {
-    const api = spotifyApiRef.current;
-    if (!api) return;
+    const api = (window as any).electronAPI;
+    if (!api?.spotifyGetPlaylistTracks) return;
     setLoadingPlaylistId(playlistId);
+    setContentError(null);
     try {
-      const result = await api.getPlaylistTracks(playlistId, 100, 0);
-      const mediaTracks = (result.items ?? [])
-        .filter((item: any) => item.track)
-        .map((item: any) => spotifyTrackToMediaTrack(item.track));
+      const tracks: any[] = await api.spotifyGetPlaylistTracks(playlistId);
+      const mediaTracks = tracks
+        .filter((t: any) => t?.id && t?.uri)
+        .map(spotifyTrackToMediaTrack);
       if (mediaTracks.length > 0) {
         await playQueue(mediaTracks, 0);
       }
@@ -576,7 +556,11 @@ function SpotifyPage() {
                     </div>
                     <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pl.name}</div>
                     <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
-                      {loadingPlaylistId === pl.id ? 'Loading…' : `${pl.tracks?.total ?? 0} tracks`}
+                      {loadingPlaylistId === pl.id
+                        ? 'Loading…'
+                        : pl.tracks?.total
+                          ? `${pl.tracks.total} tracks`
+                          : 'Click to play'}
                     </div>
                   </div>
                 ))}
