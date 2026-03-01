@@ -440,22 +440,41 @@ function SpotifyPage() {
     playQueue(mediaTracks, index);
   }, [playQueue]);
 
-  /** Fetch playlist tracks via the main process (avoids renderer-side token issues) then queue them. */
-  const handlePlayPlaylist = useCallback(async (playlistId: string) => {
+  /** Fetch playlist tracks via the main process then queue them.
+   *  Falls back to Spotify context-URI playback for Daily Mix / Radio playlists
+   *  whose tracks the API won't expose (returns empty array on 403). */
+  const handlePlayPlaylist = useCallback(async (playlist: any) => {
     const api = (window as any).electronAPI;
     if (!api?.spotifyGetPlaylistTracks) return;
-    setLoadingPlaylistId(playlistId);
+    setLoadingPlaylistId(playlist.id);
     setContentError(null);
     try {
-      const tracks: any[] = await api.spotifyGetPlaylistTracks(playlistId);
-      const mediaTracks = tracks
+      const rawTracks: any[] = await api.spotifyGetPlaylistTracks(playlist.id);
+      const mediaTracks = rawTracks
         .filter((t: any) => t?.id && t?.uri)
         .map(spotifyTrackToMediaTrack);
+
       if (mediaTracks.length > 0) {
+        // Normal playlist — queue individual tracks so the app controls them
         await playQueue(mediaTracks, 0);
+      } else {
+        // Spotify-generated / restricted playlist (Daily Mix, Radio…)
+        // Play as a context URI; the SDK handles track sequencing
+        const contextTrack: MediaTrack = {
+          id: `spotify:playlist:${playlist.id}`,
+          sourceType: MediaSourceType.SPOTIFY,
+          sourceId: `spotify:playlist:${playlist.id}`,
+          title: playlist.name ?? 'Spotify Playlist',
+          artist: 'Spotify',
+          artwork: playlist.images?.[0]?.url ?? null,
+          duration: 0,
+          isPlayable: true,
+          requiresAuth: true,
+        };
+        await playQueue([contextTrack], 0);
       }
     } catch (err: any) {
-      setContentError(err?.message ?? 'Failed to load playlist tracks');
+      setContentError(err?.message ?? 'Failed to load playlist');
     } finally {
       setLoadingPlaylistId(null);
     }
@@ -544,7 +563,7 @@ function SpotifyPage() {
                   <div
                     key={pl.id}
                     style={{ ...card, opacity: loadingPlaylistId === pl.id ? 0.6 : 1 }}
-                    onClick={() => loadingPlaylistId ? null : handlePlayPlaylist(pl.id)}
+                    onClick={() => loadingPlaylistId ? null : handlePlayPlaylist(pl)}
                     onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.09)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)'; }}
                   >

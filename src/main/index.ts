@@ -739,13 +739,21 @@ function setupIPC(): void {
     const accessToken = await getValidSpotifyToken();
     const headers = { Authorization: `Bearer ${accessToken}` };
 
-    // Collect all pages (Spotify caps at 100 items per request)
+    // Collect all pages (Spotify caps at 100 items per request).
+    // Returns an empty array for playlists that don't expose tracks via the
+    // API (Spotify-generated playlists like Daily Mix, Radio) — the renderer
+    // will fall back to playing those as a context URI instead.
     const allTracks: any[] = [];
     let url: string | null =
-      `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks?limit=100&fields=next,items(track(id,name,uri,duration_ms,artists(name),album(name,images)))`;
+      `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks?limit=100`;
 
     while (url) {
       const res = await fetch(url, { headers });
+      if (res.status === 403) {
+        // Spotify-generated / restricted playlists — signal the renderer to
+        // use context-URI playback instead.
+        return [];
+      }
       if (!res.ok) {
         const body = await res.text();
         throw new Error(`Spotify API error ${res.status}: ${body}`);
