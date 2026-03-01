@@ -63,6 +63,10 @@ const electronAPI = {
     accessToken: string; refreshToken: string; expiresAt: number;
   } | null>,
 
+  // Spotify – fetch all tracks for a playlist via the main process
+  spotifyGetPlaylistTracks: (playlistId: string) =>
+    ipcRenderer.invoke('spotify:get-playlist-tracks', playlistId) as Promise<any[]>,
+
   // Jellyfin – return stored session credentials for renderer search
   jellyfinGetSession: () => ipcRenderer.invoke('jellyfin:get-session') as Promise<{
     accessToken: string; userId: string; serverUrl: string;

@@ -731,6 +731,37 @@ function setupIPC(): void {
   });
 
   // -------------------------------------------------------------------------
+  // Spotify – fetch tracks for a single playlist (renderer-safe, uses main-
+  // process token management so the renderer never touches tokens directly)
+  // -------------------------------------------------------------------------
+
+  ipcMain.handle('spotify:get-playlist-tracks', async (_event, playlistId: string) => {
+    const accessToken = await getValidSpotifyToken();
+    const headers = { Authorization: `Bearer ${accessToken}` };
+
+    // Collect all pages (Spotify caps at 100 items per request)
+    const allTracks: any[] = [];
+    let url: string | null =
+      `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/tracks?limit=100&fields=next,items(track(id,name,uri,duration_ms,artists(name),album(name,images)))`;
+
+    while (url) {
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`Spotify API error ${res.status}: ${body}`);
+      }
+      const page = (await res.json()) as any;
+      const tracks = (page.items ?? [])
+        .map((item: any) => item?.track)
+        .filter(Boolean);
+      allTracks.push(...tracks);
+      url = page.next ?? null;
+    }
+
+    return allTracks;
+  });
+
+  // -------------------------------------------------------------------------
   // Jellyfin – return stored session for renderer-side API calls (search)
   // -------------------------------------------------------------------------
 
