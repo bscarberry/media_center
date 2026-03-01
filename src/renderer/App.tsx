@@ -1241,6 +1241,14 @@ function TwitterPage() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<(string | null)[]>(TWITTER_ACCOUNTS.map(() => null));
 
+  // Clear any background image left by other pages (e.g. HomePage's Unsplash photo)
+  useEffect(() => {
+    document.body.style.backgroundImage = '';
+    document.body.style.backgroundSize = '';
+    document.body.style.backgroundPosition = '';
+    document.body.style.backgroundAttachment = '';
+  }, []);
+
   useEffect(() => {
     const api = (window as any).electronAPI;
     if (!api?.getConfig) return;
