@@ -109,14 +109,14 @@ const errorFallbackStyle: CSSProperties = {
   height: '100%',
   padding: 40,
   textAlign: 'center',
-  color: '#ffffff',
+  color: '#F0F0F5',
 };
 
 const retryBtnStyle: CSSProperties = {
   padding: '8px 24px',
   borderRadius: 9999,
-  border: '1px solid #282828',
-  backgroundColor: '#1db954',
+  border: '1px solid rgba(255,255,255,0.12)',
+  backgroundColor: '#7B7CF8',
   color: '#ffffff',
   fontSize: 14,
   fontWeight: 600,
@@ -137,7 +137,7 @@ function PageSkeleton() {
             width: `${w}px`,
             height: 20,
             borderRadius: 4,
-            backgroundColor: '#242424',
+            backgroundColor: 'rgba(255,255,255,0.06)',
             marginBottom: 12,
           }}
         />
@@ -149,8 +149,8 @@ function PageSkeleton() {
             style={{
               width: 180,
               height: 220,
-              borderRadius: 8,
-              backgroundColor: '#181818',
+              borderRadius: 10,
+              backgroundColor: 'rgba(255,255,255,0.04)',
             }}
           />
         ))}
@@ -480,15 +480,16 @@ function SpotifyPage() {
     }
   }, [playQueue]);
 
-  const pg: CSSProperties = { padding: 24, height: '100%', overflowY: 'auto', boxSizing: 'border-box' };
-  const hdr: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 };
-  const sectionTitle: CSSProperties = { fontSize: 16, fontWeight: 600, marginBottom: 14, color: '#fff' };
-  const grid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14, marginBottom: 32 };
+  const pg: CSSProperties = { padding: 28, height: '100%', overflowY: 'auto', boxSizing: 'border-box' };
+  const hdr: CSSProperties = { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 };
+  const sectionTitle: CSSProperties = { fontSize: 13, fontWeight: 600, marginBottom: 14, color: 'rgba(240,240,245,0.55)', textTransform: 'uppercase', letterSpacing: '0.5px' };
+  const grid: CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(156px, 1fr))', gap: 14, marginBottom: 36 };
   const card: CSSProperties = {
-    background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 12,
-    cursor: 'pointer', transition: 'background 0.15s',
+    background: 'rgba(255,255,255,0.04)', borderRadius: 12, padding: 12,
+    border: '1px solid rgba(255,255,255,0.07)',
+    cursor: 'pointer', transition: 'background 0.15s, transform 0.15s, box-shadow 0.15s',
   };
-  const imgBox: CSSProperties = { width: '100%', aspectRatio: '1', borderRadius: 6, overflow: 'hidden', marginBottom: 8, background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center' };
+  const imgBox: CSSProperties = { width: '100%', aspectRatio: '1', borderRadius: 8, overflow: 'hidden', marginBottom: 10, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center' };
 
   if (statusLoading) {
     return <div style={pg}><p style={{ color: 'rgba(255,255,255,0.4)' }}>Loading…</p></div>;
@@ -504,19 +505,19 @@ function SpotifyPage() {
   return (
     <div style={pg}>
       <div style={hdr}>
-        <span style={{ fontSize: 28 }}>{'\uD83C\uDFB5'}</span>
+        <span style={{ fontSize: 26 }}>{'\uD83C\uDFB5'}</span>
         <div>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Spotify</h2>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#F0F0F5' }}>Spotify</h2>
           {content?.profile?.display_name && (
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'rgba(240,240,245,0.45)', marginTop: 2 }}>
               {content.profile.display_name}
             </div>
           )}
         </div>
-        <button onClick={refresh} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 18 }}>↻</button>
+        <button onClick={refresh} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'rgba(240,240,245,0.3)', cursor: 'pointer', fontSize: 18, padding: '4px 8px', borderRadius: 6 }}>↻</button>
       </div>
 
-      {contentLoading && <p style={{ color: 'rgba(255,255,255,0.4)' }}>Loading your library…</p>}
+      {contentLoading && <p style={{ color: 'rgba(240,240,245,0.35)', fontSize: 14 }}>Loading your library…</p>}
       {contentError && <p style={{ color: '#ff6b6b', fontSize: 13 }}>{contentError}</p>}
 
       {content && !contentLoading && (
@@ -531,21 +532,21 @@ function SpotifyPage() {
                   onClick={() => handlePlayTrack(content.topTracks, i)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px',
-                    borderRadius: 8, cursor: 'pointer', marginBottom: 4,
-                    background: 'rgba(255,255,255,0.04)',
+                    borderRadius: 8, cursor: 'pointer', marginBottom: 2,
+                    background: 'transparent',
                     transition: 'background 0.15s',
                   }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.08)'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.04)'; }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.06)'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
                 >
-                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', width: 18, textAlign: 'right', flexShrink: 0 }}>{i + 1}</span>
+                  <span style={{ fontSize: 12, color: 'rgba(240,240,245,0.25)', width: 18, textAlign: 'right', flexShrink: 0 }}>{i + 1}</span>
                   {track.album?.images?.[0]?.url
-                    ? <img src={track.album.images[0].url} alt="" style={{ width: 36, height: 36, borderRadius: 4, flexShrink: 0 }} />
-                    : <div style={{ width: 36, height: 36, borderRadius: 4, background: '#282828', flexShrink: 0 }} />
+                    ? <img src={track.album.images[0].url} alt="" style={{ width: 36, height: 36, borderRadius: 5, flexShrink: 0 }} />
+                    : <div style={{ width: 36, height: 36, borderRadius: 5, background: 'rgba(255,255,255,0.08)', flexShrink: 0 }} />
                   }
                   <div style={{ overflow: 'hidden' }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{track.name}</div>
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0F0F5' }}>{track.name}</div>
+                    <div style={{ fontSize: 11, color: 'rgba(240,240,245,0.4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {track.artists?.map((a: any) => a.name).join(', ')}
                     </div>
                   </div>
@@ -564,8 +565,18 @@ function SpotifyPage() {
                     key={pl.id}
                     style={{ ...card, opacity: loadingPlaylistId === pl.id ? 0.6 : 1 }}
                     onClick={() => loadingPlaylistId ? null : handlePlayPlaylist(pl)}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.09)'; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)'; }}
+                    onMouseEnter={(e) => {
+                      const el = e.currentTarget as HTMLDivElement;
+                      el.style.background = 'rgba(255,255,255,0.08)';
+                      el.style.transform = 'translateY(-2px)';
+                      el.style.boxShadow = '0 8px 24px rgba(0,0,0,0.4)';
+                    }}
+                    onMouseLeave={(e) => {
+                      const el = e.currentTarget as HTMLDivElement;
+                      el.style.background = 'rgba(255,255,255,0.04)';
+                      el.style.transform = 'none';
+                      el.style.boxShadow = 'none';
+                    }}
                   >
                     <div style={imgBox}>
                       {pl.images?.[0]?.url
@@ -573,8 +584,8 @@ function SpotifyPage() {
                         : <span style={{ fontSize: 32 }}>{'\uD83C\uDFB5'}</span>
                       }
                     </div>
-                    <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{pl.name}</div>
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: '#F0F0F5' }}>{pl.name}</div>
+                    <div style={{ fontSize: 11, color: 'rgba(240,240,245,0.35)', marginTop: 2 }}>
                       {loadingPlaylistId === pl.id
                         ? 'Loading…'
                         : pl.tracks?.total
@@ -1185,7 +1196,7 @@ function JellyfinPage() {
         <button onClick={refresh} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 18 }}>↻</button>
       </div>
 
-      {contentLoading && <p style={{ color: 'rgba(255,255,255,0.4)' }}>Loading your library…</p>}
+      {contentLoading && <p style={{ color: 'rgba(240,240,245,0.35)', fontSize: 14 }}>Loading your library…</p>}
       {contentError && <p style={{ color: '#ff6b6b', fontSize: 13 }}>{contentError}</p>}
 
       {content && !contentLoading && (
@@ -1634,14 +1645,14 @@ function Sidebar() {
       to={item.path}
       style={{
         ...navLink,
-        backgroundColor: isActive ? '#282828' : 'transparent',
-        color: isActive ? '#ffffff' : '#b3b3b3',
+        backgroundColor: isActive ? 'rgba(255,255,255,0.09)' : 'transparent',
+        color: isActive ? '#F0F0F5' : 'rgba(240,240,245,0.45)',
       }}
     >
-      <span style={{ fontSize: 16, width: 24, textAlign: 'center' }}>
+      <span style={{ fontSize: 15, width: 22, textAlign: 'center', opacity: isActive ? 1 : 0.7 }}>
         {item.icon}
       </span>
-      <span style={{ fontSize: 14, fontWeight: isActive ? 600 : 400 }}>
+      <span style={{ fontSize: 13, fontWeight: isActive ? 600 : 400 }}>
         {item.label}
       </span>
     </NavLink>
@@ -1699,15 +1710,15 @@ function SourceIndicator({ name, color, connected }: { name: string; color: stri
   return (
     <div style={sourceRow}>
       <div style={{
-        width: 8,
-        height: 8,
+        width: 7,
+        height: 7,
         borderRadius: '50%',
-        backgroundColor: connected ? color : '#4a4a4a',
-        boxShadow: connected ? `0 0 6px ${color}60` : 'none',
+        backgroundColor: connected ? color : 'rgba(255,255,255,0.18)',
+        boxShadow: connected ? `0 0 6px ${color}80` : 'none',
       }} />
-      <span style={{ fontSize: 12, color: connected ? '#b3b3b3' : '#6a6a6a' }}>{name}</span>
-      <span style={{ fontSize: 10, color: connected ? color : '#6a6a6a', marginLeft: 'auto', fontWeight: connected ? 500 : 400 }}>
-        {connected ? 'Connected' : 'Offline'}
+      <span style={{ fontSize: 12, color: connected ? 'rgba(240,240,245,0.6)' : 'rgba(240,240,245,0.25)' }}>{name}</span>
+      <span style={{ fontSize: 10, color: connected ? color : 'rgba(240,240,245,0.2)', marginLeft: 'auto', fontWeight: connected ? 500 : 400 }}>
+        {connected ? 'Live' : 'Off'}
       </span>
     </div>
   );
@@ -1865,21 +1876,20 @@ function AppLayout() {
 
 const appContainer: CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: '240px 1fr',
-  gridTemplateRows: '1fr 90px',
+  gridTemplateColumns: '228px 1fr',
+  gridTemplateRows: '1fr 88px',
   height: '100vh',
   width: '100vw',
   overflow: 'hidden',
-  // No backgroundColor here — body provides #0a0a0a as the base, and HomePage
-  // temporarily overrides it with the Unsplash image via document.body.style.
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  // No backgroundColor here — body provides #0B0B0E as the base via globals.css
+  fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif",
 };
 
 const sidebarStyle: CSSProperties = {
   gridRow: '1 / 2',
   gridColumn: '1 / 2',
-  backgroundColor: '#000000',
-  borderRight: '1px solid #181818',
+  backgroundColor: '#080809',
+  borderRight: '1px solid rgba(255,255,255,0.07)',
   display: 'flex',
   flexDirection: 'column',
   overflow: 'hidden',
@@ -1894,56 +1904,56 @@ const logoContainer: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 10,
-  padding: '0 20px 16px',
+  padding: '0 18px 18px',
 };
 
 const logoText: CSSProperties = {
-  fontSize: 18,
+  fontSize: 16,
   fontWeight: 700,
-  color: '#ffffff',
+  color: '#F0F0F5',
   letterSpacing: '-0.3px',
 };
 
 const navSection: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: 2,
-  padding: '0 12px',
+  gap: 1,
+  padding: '0 10px',
 };
 
 const navLink: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: 12,
-  padding: '10px 12px',
-  borderRadius: 6,
+  gap: 10,
+  padding: '9px 10px',
+  borderRadius: 8,
   textDecoration: 'none',
-  transition: 'background-color 150ms ease',
+  transition: 'background-color 150ms ease, color 150ms ease',
 };
 
 const navDivider: CSSProperties = {
-  padding: '12px 20px 4px',
+  padding: '14px 18px 4px',
 };
 
 const navDividerText: CSSProperties = {
-  fontSize: 11,
+  fontSize: 10,
   fontWeight: 600,
-  color: '#4a4a4a',
+  color: 'rgba(240,240,245,0.25)',
   textTransform: 'uppercase',
-  letterSpacing: 0.5,
+  letterSpacing: '0.6px',
 };
 
 const sourceSection: CSSProperties = {
-  padding: '12px 20px 16px',
-  borderTop: '1px solid #181818',
+  padding: '10px 18px 14px',
+  borderTop: '1px solid rgba(255,255,255,0.07)',
 };
 
 const sourceSectionTitle: CSSProperties = {
-  fontSize: 11,
+  fontSize: 10,
   fontWeight: 600,
-  color: '#6a6a6a',
+  color: 'rgba(240,240,245,0.25)',
   textTransform: 'uppercase',
-  letterSpacing: 0.5,
+  letterSpacing: '0.6px',
   marginBottom: 10,
 };
 
@@ -1963,9 +1973,11 @@ const mainContent: CSSProperties = {
 const playbackBarStyle: CSSProperties = {
   gridRow: '2 / 3',
   gridColumn: '1 / 3',
-  height: 90,
-  backgroundColor: '#181818',
-  borderTop: '1px solid #282828',
+  height: 88,
+  backgroundColor: 'rgba(10,10,14,0.88)',
+  backdropFilter: 'blur(24px) saturate(180%)',
+  WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+  borderTop: '1px solid rgba(255,255,255,0.07)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -1974,7 +1986,7 @@ const playbackBarStyle: CSSProperties = {
 
 const controlBtn: CSSProperties = {
   fontSize: 20,
-  color: '#b3b3b3',
+  color: 'rgba(240,240,245,0.55)',
   cursor: 'pointer',
 };
 
@@ -1983,14 +1995,15 @@ const pageStyle: CSSProperties = {
 };
 
 const pageTitle: CSSProperties = {
-  fontSize: 28,
+  fontSize: 26,
   fontWeight: 700,
   marginBottom: 8,
+  color: '#F0F0F5',
 };
 
 const pageSubtitle: CSSProperties = {
   fontSize: 14,
-  color: '#b3b3b3',
+  color: 'rgba(240,240,245,0.55)',
   marginBottom: 24,
 };
 
@@ -2000,11 +2013,11 @@ const searchInputContainer: CSSProperties = {
 
 const searchInputStyle: CSSProperties = {
   width: '100%',
-  padding: '12px 16px',
+  padding: '12px 18px',
   borderRadius: 9999,
-  border: 'none',
-  backgroundColor: '#242424',
-  color: '#ffffff',
+  border: '1px solid rgba(255,255,255,0.1)',
+  backgroundColor: 'rgba(255,255,255,0.06)',
+  color: '#F0F0F5',
   fontSize: 14,
   outline: 'none',
 };
@@ -2016,9 +2029,9 @@ const servicePrompt: CSSProperties = {
   justifyContent: 'center',
   padding: 48,
   textAlign: 'center',
-  backgroundColor: '#181818',
-  borderRadius: 12,
-  border: '1px solid #282828',
+  backgroundColor: 'rgba(255,255,255,0.04)',
+  borderRadius: 14,
+  border: '1px solid rgba(255,255,255,0.07)',
   maxWidth: 400,
   margin: '0 auto',
 };
@@ -2038,14 +2051,15 @@ const statusBanner: CSSProperties = {
   alignItems: 'center',
   justifyContent: 'space-between',
   padding: '12px 16px',
-  borderRadius: 8,
-  border: '1px solid #282828',
+  borderRadius: 10,
+  border: '1px solid rgba(255,255,255,0.08)',
   marginBottom: 24,
+  backgroundColor: 'rgba(255,255,255,0.04)',
 };
 
 const widgetCardInline: CSSProperties = {
   padding: 20,
-  borderRadius: 8,
-  border: '1px solid #282828',
-  backgroundColor: '#181818',
+  borderRadius: 10,
+  border: '1px solid rgba(255,255,255,0.08)',
+  backgroundColor: 'rgba(255,255,255,0.04)',
 };
