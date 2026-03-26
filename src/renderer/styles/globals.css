@@ -1,13 +1,62 @@
+/* Inter – a clean, modern typeface used by Linear, Figma, Vercel, etc. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ============================================================================
-   Global styles – Brandon's Media Hub
+   Design tokens – CSS custom properties
+   ============================================================================ */
+
+:root {
+  /* Backgrounds */
+  --bg-base:      #0B0B0E;
+  --bg-sidebar:   #080809;
+  --bg-surface:   #131316;
+  --bg-raised:    #1A1A1F;
+  --bg-hover:     rgba(255,255,255,0.05);
+  --bg-active:    rgba(255,255,255,0.09);
+  --bg-card:      rgba(255,255,255,0.04);
+  --bg-card-hover:rgba(255,255,255,0.08);
+
+  /* Text */
+  --text-primary:   #F0F0F5;
+  --text-secondary: rgba(240,240,245,0.55);
+  --text-muted:     rgba(240,240,245,0.28);
+  --text-faint:     rgba(240,240,245,0.14);
+
+  /* Borders */
+  --border:       rgba(255,255,255,0.07);
+  --border-strong:rgba(255,255,255,0.12);
+
+  /* Accent */
+  --accent:       #7B7CF8;
+  --accent-glow:  rgba(123,124,248,0.25);
+
+  /* Source colors */
+  --spotify:  #1DB954;
+  --youtube:  #FF4444;
+  --jellyfin: #AA5CC3;
+
+  /* Radii */
+  --r-sm:  6px;
+  --r-md:  10px;
+  --r-lg:  14px;
+  --r-xl:  20px;
+  --r-full:9999px;
+
+  /* Transitions */
+  --t-fast:  120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --t-base:  200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --t-slow:  350ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================================================
+   Base reset & root elements
    ============================================================================ */
 
 @layer base {
-  /* Remove default margins */
   *,
   *::before,
   *::after {
@@ -20,68 +69,46 @@
     height: 100%;
     width: 100%;
     overflow: hidden;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-      Helvetica, Arial, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display',
+      'Segoe UI', system-ui, sans-serif;
   }
 
   body {
-    background-color: #0a0a0a;
-    color: #ffffff;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    /* Prevent text selection during drag operations */
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    letter-spacing: -0.01em;
     user-select: none;
   }
 
-  /* Allow text selection in content areas */
-  .select-text {
-    user-select: text;
-  }
+  .select-text { user-select: text; }
 
-  /* Custom scrollbar (dark theme) */
-  ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+  /* Scrollbar — thin, unobtrusive */
+  ::-webkit-scrollbar          { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track    { background: transparent; }
+  ::-webkit-scrollbar-thumb    {
+    background: rgba(255,255,255,0.12);
+    border-radius: var(--r-full);
   }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.22); }
 
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: #3a3a3a;
-    border-radius: 4px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: #4a4a4a;
-  }
-
-  /* Hide scrollbar until hover */
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-
-  .scrollbar-on-hover::-webkit-scrollbar-thumb {
-    background: transparent;
-  }
-
+  .scrollbar-hide::-webkit-scrollbar           { display: none; }
+  .scrollbar-on-hover::-webkit-scrollbar-thumb { background: transparent; }
   .scrollbar-on-hover:hover::-webkit-scrollbar-thumb {
-    background: #3a3a3a;
+    background: rgba(255,255,255,0.12);
   }
 }
 
+/* ============================================================================
+   Component layer
+   ============================================================================ */
+
 @layer components {
-  /* Drag region for macOS title bar */
-  .drag-region {
-    -webkit-app-region: drag;
-  }
+  .drag-region  { -webkit-app-region: drag; }
+  .no-drag      { -webkit-app-region: no-drag; }
 
-  .no-drag {
-    -webkit-app-region: no-drag;
-  }
-
-  /* Truncate text with ellipsis */
   .line-clamp-2 {
     overflow: hidden;
     display: -webkit-box;
@@ -89,56 +116,68 @@
     -webkit-box-orient: vertical;
   }
 
-  /* Loading skeleton animation */
+  /* Skeleton loading */
   .skeleton {
-    @apply bg-surface animate-pulse rounded;
+    background: var(--bg-raised);
+    border-radius: var(--r-sm);
+    animation: pulse 1.5s ease-in-out infinite;
   }
-}
 
-@layer utilities {
-  /* Glass effect for overlays */
+  /* Surface card */
+  .surface-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    transition: background var(--t-base), border-color var(--t-base),
+                box-shadow var(--t-base), transform var(--t-base);
+  }
+  .surface-card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-strong);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  /* Glass panel */
   .glass {
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+  }
+
+  /* Nav pill — active state */
+  .nav-pill-active {
+    background: var(--bg-active);
+    color: var(--text-primary) !important;
   }
 }
 
 /* ============================================================================
-   Keyframe animations
+   Keyframes
    ============================================================================ */
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+@keyframes spin   { to { transform: rotate(360deg); } }
+@keyframes pulse  { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
 
-@keyframes pulse {
-  50% { opacity: 0.5; }
-}
+.fade-in  { animation: fadeIn  200ms var(--t-base) both; }
+.scale-in { animation: scaleIn 200ms var(--t-base) both; }
 
-@keyframes slideInRight {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
+/* ============================================================================
+   React-grid-layout overrides
+   ============================================================================ */
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-/* react-grid-layout overrides */
-.react-grid-layout {
-  position: relative;
-}
+.react-grid-layout { position: relative; }
 
 .react-grid-item {
-  transition: all 200ms ease;
-  transition-property: left, top, width, height;
+  transition: left 200ms ease, top 200ms ease, width 200ms ease, height 200ms ease;
 }
 
 .react-grid-item.react-grid-placeholder {
-  background: #1db954 !important;
-  opacity: 0.15 !important;
-  border-radius: 12px;
+  background: var(--accent) !important;
+  opacity: 0.12 !important;
+  border-radius: var(--r-lg);
 }
 
 .react-resizable-handle {
@@ -146,6 +185,4 @@
   transition: opacity 200ms ease;
 }
 
-.react-grid-item:hover .react-resizable-handle {
-  opacity: 0.5;
-}
+.react-grid-item:hover .react-resizable-handle { opacity: 0.4; }

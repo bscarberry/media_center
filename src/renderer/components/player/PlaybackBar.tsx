@@ -401,9 +401,11 @@ const barContainer: CSSProperties = {
   right: 0,
   height: p.barHeight,
   backgroundColor: p.bgBar,
+  backdropFilter: 'blur(24px) saturate(180%)',
+  WebkitBackdropFilter: 'blur(24px) saturate(180%)',
   borderTop: `1px solid ${p.border}`,
   zIndex: 1000,
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif",
 };
 
 const barInner: CSSProperties = {
