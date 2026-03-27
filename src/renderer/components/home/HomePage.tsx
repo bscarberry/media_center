@@ -1,224 +1,147 @@
 // ============================================================================
-// HomePage – rich dashboard with weather, news, now-playing, and quick access
+// HomePage – clean dashboard: stats, now playing, weather, news, quick links
 // ============================================================================
 
 import React, { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-// ---------------------------------------------------------------------------
-// Unsplash photo type
-// ---------------------------------------------------------------------------
-
-interface UnsplashPhoto {
-  urls: { regular: string };
-  user: { name: string; links: { html: string } };
-}
+import { usePlayerStore } from '../player/usePlayerStore';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-interface QuickAccessItem {
-  id: string;
-  title: string;
-  subtitle: string;
+interface DashboardWeather {
+  temp: number;
+  feelsLike: number;
+  humidity: number;
+  windSpeed: number;
+  description: string;
   icon: string;
-  color: string;
-  route: string;
+  locationName: string;
+}
+
+interface DashboardHeadline {
+  title: string;
+  url: string;
+  source: { name: string };
+  publishedAt: string;
 }
 
 // ---------------------------------------------------------------------------
-// Component
+// Root
 // ---------------------------------------------------------------------------
 
 export function HomePage() {
   const navigate = useNavigate();
-  const [bgPhoto, setBgPhoto] = useState<UnsplashPhoto | null>(null);
 
-  // Greeting based on time of day
   const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
+    const h = new Date().getHours();
+    if (h < 12) return 'Good morning';
+    if (h < 18) return 'Good afternoon';
     return 'Good evening';
   }, []);
 
-  // Fetch a random nature photo from Unsplash for the dashboard background.
-  // Results are cached in sessionStorage so we only hit the API once per session.
-  useEffect(() => {
-    const api = (window as any).electronAPI;
-    if (!api?.getConfig) return;
-
-    const cached = sessionStorage.getItem('unsplash-bg');
-    if (cached) {
-      try { setBgPhoto(JSON.parse(cached)); return; } catch { /* ignore */ }
-    }
-
-    api.getConfig().then(async (cfg: Record<string, string>) => {
-      if (!cfg.UNSPLASH_ACCESS_KEY) return;
-      try {
-        const res = await fetch(
-          `https://api.unsplash.com/photos/random?query=nature+landscape&orientation=landscape&client_id=${cfg.UNSPLASH_ACCESS_KEY}`,
-        );
-        if (!res.ok) return;
-        const photo = await res.json();
-        const data: UnsplashPhoto = {
-          urls: { regular: photo.urls.regular },
-          user: { name: photo.user.name, links: { html: photo.user.links.html } },
-        };
-        setBgPhoto(data);
-        sessionStorage.setItem('unsplash-bg', JSON.stringify(data));
-      } catch { /* silent – background is optional */ }
-    }).catch(() => {});
-  }, []);
-
-  // Apply the photo as the document body background. Using document.body directly
-  // is the only reliable approach — position:fixed with negative z-index is invisible
-  // because body has overflow:hidden which creates a stacking context that buries it.
-  // Cleanup runs when navigating away so other pages see the plain dark background.
-  useEffect(() => {
-    if (!bgPhoto) return;
-    document.body.style.backgroundImage = `url(${bgPhoto.urls.regular})`;
-    document.body.style.backgroundSize = 'cover';
-    document.body.style.backgroundPosition = 'center';
-    document.body.style.backgroundAttachment = 'fixed';
-    return () => {
-      document.body.style.backgroundImage = '';
-      document.body.style.backgroundSize = '';
-      document.body.style.backgroundPosition = '';
-      document.body.style.backgroundAttachment = '';
-    };
-  }, [bgPhoto]);
-
-  const quickAccess: QuickAccessItem[] = [
-    { id: 'spotify', title: 'Spotify', subtitle: 'Music streaming', icon: '\uD83C\uDFB5', color: '#1db954', route: '/spotify' },
-    { id: 'youtube', title: 'YouTube', subtitle: 'Videos & music', icon: '\u25B6\uFE0F', color: '#ff0000', route: '/youtube' },
-    { id: 'library', title: 'Library', subtitle: 'Your collection', icon: '\uD83D\uDCDA', color: '#7c3aed', route: '/library' },
-    { id: 'search', title: 'Search', subtitle: 'Find anything', icon: '\uD83D\uDD0D', color: '#f59e0b', route: '/search' },
-  ];
-
   return (
-    <div style={pageWrapper}>
-      {/* Page content */}
-      <div style={container}>
-        {/* Header / Greeting */}
-        <header style={headerSection}>
-          <h1 style={greetingStyle}>{greeting}</h1>
-          <p style={greetingSubtext}>Welcome to Media Hub</p>
-        </header>
-
-        {/* Quick Access Cards */}
-        <section style={quickAccessSection}>
-          {quickAccess.map((item) => (
-            <QuickAccessCard
-              key={item.id}
-              item={item}
-              onClick={() => navigate(item.route)}
-            />
-          ))}
-        </section>
-
-        {/* Main Dashboard Grid */}
-        <div style={dashboardGrid}>
-          <NowPlayingCard />
-          <WeatherCard />
-          <NewsCard />
-          <DiscoverCard onNavigate={(route) => navigate(route)} />
+    <div style={page}>
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <header style={header}>
+        <div>
+          <h1 style={greetingH1}>{greeting}</h1>
+          <p style={greetingSub}>Media Hub</p>
         </div>
+        <div style={headerRight}>
+          <ClockBadge />
+        </div>
+      </header>
 
-        {/* Section Links */}
-        <section style={sectionLinksRow}>
-          <SectionLink
-            title="Weather"
-            icon={'\u2601\uFE0F'}
-            description="Forecast & alerts"
-            color="#4fc3f7"
-            onClick={() => navigate('/weather')}
-          />
-          <SectionLink
-            title="News"
-            icon={'\uD83D\uDCF0'}
-            description="Headlines & trending"
-            color="#ff9800"
-            onClick={() => navigate('/news')}
-          />
-          <SectionLink
-            title="Settings"
-            icon={'\u2699\uFE0F'}
-            description="Configure services"
-            color="#6a6a6a"
-            onClick={() => navigate('/settings')}
-          />
-        </section>
+      {/* ── Quick-launch row ───────────────────────────────────── */}
+      <div style={quickRow}>
+        {[
+          { label: 'Spotify', icon: '🎵', color: '#1db954', route: '/spotify' },
+          { label: 'YouTube', icon: '▶️', color: '#FF4444', route: '/youtube' },
+          { label: 'Jellyfin', icon: '🎥', color: '#aa5cc3', route: '/jellyfin' },
+          { label: 'Library', icon: '📚', color: '#7B7CF8', route: '/library' },
+          { label: 'Search', icon: '🔍', color: '#f59e0b', route: '/search' },
+          { label: 'Settings', icon: '⚙️', color: '#6b7280', route: '/settings' },
+        ].map((item) => (
+          <QuickLaunchBtn key={item.route} {...item} onClick={() => navigate(item.route)} />
+        ))}
       </div>
 
-      {/* ================================================================= */}
-      {/* Unsplash attribution (required by Unsplash API guidelines)        */}
-      {/* ================================================================= */}
-      {bgPhoto && (
-        <div style={attributionBadge}>
-          Photo by{' '}
-          <a
-            href={`${bgPhoto.user.links.html}?utm_source=media_hub&utm_medium=referral`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={attrLink}
-          >
-            {bgPhoto.user.name}
-          </a>
-          {' '}on{' '}
-          <a
-            href="https://unsplash.com/?utm_source=media_hub&utm_medium=referral"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={attrLink}
-          >
-            Unsplash
-          </a>
+      {/* ── Main grid ──────────────────────────────────────────── */}
+      <div style={mainGrid}>
+        {/* LEFT column */}
+        <div style={leftCol}>
+          <NowPlayingCard />
+          <DiscoverCard onNavigate={(r) => navigate(r)} />
         </div>
-      )}
+
+        {/* RIGHT column */}
+        <div style={rightCol}>
+          <WeatherCard />
+          <NewsCard />
+        </div>
+      </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Quick Access Card
+// Clock badge
 // ---------------------------------------------------------------------------
 
-function QuickAccessCard({ item, onClick }: { item: QuickAccessItem; onClick: () => void }) {
-  const [hovered, setHovered] = useState(false);
+function ClockBadge() {
+  const [time, setTime] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const hh = String(time.getHours()).padStart(2, '0');
+  const mm = String(time.getMinutes()).padStart(2, '0');
+  const day = time.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return (
+    <div style={clockWrap}>
+      <span style={clockTime}>{hh}:{mm}</span>
+      <span style={clockDate}>{day}</span>
+    </div>
+  );
+}
 
+// ---------------------------------------------------------------------------
+// Quick launch button
+// ---------------------------------------------------------------------------
+
+function QuickLaunchBtn({
+  label, icon, color, onClick,
+}: { label: string; icon: string; color: string; route: string; onClick: () => void }) {
+  const [hov, setHov] = useState(false);
   return (
     <button
       onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
       style={{
-        ...quickCard,
-        backgroundColor: hovered ? 'rgba(255, 255, 255, 0.14)' : 'rgba(5, 5, 5, 0.25)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderColor: hovered ? item.color + '80' : 'rgba(255, 255, 255, 0.12)',
-        transform: hovered ? 'translateY(-2px)' : 'none',
+        ...quickBtn,
+        borderColor: hov ? color + 'aa' : 'rgba(255,255,255,0.08)',
+        backgroundColor: hov ? color + '18' : 'rgba(255,255,255,0.04)',
+        transform: hov ? 'translateY(-2px)' : 'none',
       }}
     >
-      <div style={{ ...quickCardIcon, backgroundColor: item.color + '20' }}>
-        <span style={{ fontSize: 20 }}>{item.icon}</span>
-      </div>
-      <div style={{ textAlign: 'left' }}>
-        <div style={{ fontSize: 14, fontWeight: 600, color: '#ffffff' }}>{item.title}</div>
-        <div style={{ fontSize: 11, color: '#6a6a6a', marginTop: 2 }}>{item.subtitle}</div>
-      </div>
+      <span style={{ fontSize: 18 }}>{icon}</span>
+      <span style={{ fontSize: 12, fontWeight: 500, color: hov ? '#F0F0F5' : 'rgba(240,240,245,0.6)' }}>
+        {label}
+      </span>
     </button>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Now Playing Card
+// Now Playing card
 // ---------------------------------------------------------------------------
 
 function NowPlayingCard() {
-  // Try to read recently played from localStorage
+  const { currentTrack, playbackState } = usePlayerStore();
+
   const recentTracks = useMemo(() => {
     try {
       const raw = localStorage.getItem('media-hub:recently-played');
@@ -231,56 +154,75 @@ function NowPlayingCard() {
   }, []);
 
   return (
-    <div style={widgetCard}>
-      <div style={widgetHeader}>
-        <span style={{ fontSize: 14 }}>{'\uD83C\uDFB5'}</span>
-        <h3 style={widgetTitleText}>Now Playing</h3>
-      </div>
-      <div style={widgetBody}>
-        {recentTracks.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {recentTracks.map((track: any, i: number) => (
-              <div key={i} style={trackRow}>
-                <div style={trackArtwork}>
-                  {track.artwork ? (
-                    <img src={track.artwork} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <span style={{ fontSize: 16, color: '#6a6a6a' }}>{'\u266B'}</span>
-                  )}
-                </div>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={trackTitle}>{track.title || 'Unknown Track'}</div>
-                  <div style={trackArtist}>{track.artist || 'Unknown Artist'}</div>
-                </div>
-                <div style={trackSource}>{track.sourceType || ''}</div>
+    <Card label="Now Playing" icon="🎵">
+      {currentTrack ? (
+        <div style={nowPlayingHero}>
+          {/* Artwork */}
+          <div style={heroArtwork}>
+            {currentTrack.artwork ? (
+              <img src={currentTrack.artwork} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <span style={{ fontSize: 28, color: 'rgba(240,240,245,0.3)' }}>♫</span>
+            )}
+          </div>
+          {/* Info */}
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#F0F0F5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {currentTrack.title}
+            </div>
+            <div style={{ fontSize: 12, color: 'rgba(240,240,245,0.5)', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {currentTrack.artist}
+            </div>
+            {/* mini progress bar */}
+            {playbackState.duration > 0 && (
+              <div style={miniProgressTrack}>
+                <div style={{
+                  ...miniProgressFill,
+                  width: `${(playbackState.position / playbackState.duration) * 100}%`,
+                }} />
               </div>
-            ))}
+            )}
           </div>
-        ) : (
-          <div style={emptyState}>
-            <span style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83C\uDFB6'}</span>
-            <div style={{ fontSize: 13, color: '#6a6a6a' }}>No recent tracks</div>
-            <div style={{ fontSize: 11, color: '#4a4a4a', marginTop: 4 }}>Play something to see it here</div>
-          </div>
-        )}
-      </div>
-    </div>
+          {/* Playing indicator */}
+          {playbackState.isPlaying && (
+            <div style={playingDot} title="Now playing" />
+          )}
+        </div>
+      ) : recentTracks.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {recentTracks.map((track: any, i: number) => (
+            <div key={i} style={recentRow}>
+              <div style={recentArt}>
+                {track.artwork ? (
+                  <img src={track.artwork} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <span style={{ fontSize: 14, color: 'rgba(240,240,245,0.3)' }}>♫</span>
+                )}
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: '#F0F0F5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {track.title || 'Unknown Track'}
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(240,240,245,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {track.artist || 'Unknown Artist'}
+                </div>
+              </div>
+              <span style={{ fontSize: 9, fontWeight: 600, color: 'rgba(240,240,245,0.25)', textTransform: 'uppercase', letterSpacing: '0.4px', flexShrink: 0 }}>
+                {track.sourceType || ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon="🎶" message="Nothing playing" hint="Select something to play" />
+      )}
+    </Card>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Weather Card (embedded mini widget)
+// Weather card
 // ---------------------------------------------------------------------------
-
-interface DashboardWeather {
-  temp: number;
-  feelsLike: number;
-  humidity: number;
-  windSpeed: number;
-  description: string;
-  icon: string;
-  locationName: string;
-}
 
 function WeatherCard() {
   const [weather, setWeather] = useState<DashboardWeather | null>(null);
@@ -296,9 +238,9 @@ function WeatherCard() {
       }
       const units = cfg.WEATHER_UNIT?.toLowerCase().startsWith('c') ? 'metric' : 'imperial';
       const base = 'https://api.openweathermap.org/data/2.5';
-      const coords = `lat=${cfg.WEATHER_DEFAULT_LAT}&lon=${cfg.WEATHER_DEFAULT_LON}&units=${units}&appid=${cfg.WEATHER_API_KEY}`;
+      const qs = `lat=${cfg.WEATHER_DEFAULT_LAT}&lon=${cfg.WEATHER_DEFAULT_LON}&units=${units}&appid=${cfg.WEATHER_API_KEY}`;
       try {
-        const res = await fetch(`${base}/weather?${coords}`);
+        const res = await fetch(`${base}/weather?${qs}`);
         if (!res.ok) return;
         const d = await res.json();
         setWeather({
@@ -314,67 +256,45 @@ function WeatherCard() {
     }).catch(() => {});
   }, []);
 
-  const speedUnit = 'mph';
-
   return (
-    <div style={widgetCard}>
-      <div style={widgetHeader}>
-        <span style={{ fontSize: 14 }}>{'\u2601\uFE0F'}</span>
-        <h3 style={widgetTitleText}>Weather{weather ? ` — ${weather.locationName}` : ''}</h3>
-      </div>
-      <div style={widgetBody}>
-        {weather ? (
-          <div style={weatherPreview}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <img
-                src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`}
-                alt={weather.description}
-                style={{ width: 56, height: 56 }}
-              />
-              <div>
-                <div style={{ fontSize: 36, fontWeight: 700, color: '#ffffff', lineHeight: 1 }}>{weather.temp}°</div>
-                <div style={{ fontSize: 12, color: '#b3b3b3', marginTop: 4, textTransform: 'capitalize' }}>{weather.description}</div>
-              </div>
-            </div>
-            <div style={weatherDetails}>
-              <div style={weatherDetailItem}>
-                <span style={{ color: '#6a6a6a' }}>Humidity</span>
-                <span style={{ color: '#b3b3b3' }}>{weather.humidity}%</span>
-              </div>
-              <div style={weatherDetailItem}>
-                <span style={{ color: '#6a6a6a' }}>Wind</span>
-                <span style={{ color: '#b3b3b3' }}>{weather.windSpeed} {speedUnit}</span>
-              </div>
-              <div style={weatherDetailItem}>
-                <span style={{ color: '#6a6a6a' }}>Feels like</span>
-                <span style={{ color: '#b3b3b3' }}>{weather.feelsLike}°</span>
+    <Card label={weather ? `Weather — ${weather.locationName}` : 'Weather'} icon="⛅">
+      {weather ? (
+        <>
+          {/* Hero temp */}
+          <div style={weatherHero}>
+            <img
+              src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`}
+              alt={weather.description}
+              style={{ width: 64, height: 64 }}
+            />
+            <div>
+              <div style={weatherTempBig}>{weather.temp}°</div>
+              <div style={{ fontSize: 12, color: 'rgba(240,240,245,0.5)', textTransform: 'capitalize', marginTop: 2 }}>
+                {weather.description}
               </div>
             </div>
           </div>
-        ) : (
-          <div style={weatherPreview}>
-            <div style={{ fontSize: 11, color: '#4a4a4a', textAlign: 'center', marginTop: 16 }}>
-              {noConfig
-                ? 'Set WEATHER_API_KEY + WEATHER_DEFAULT_LAT/LON in .env for dashboard weather'
-                : 'Loading...'}
-            </div>
+          {/* Detail row */}
+          <div style={weatherStatRow}>
+            <StatChip label="Humidity" value={`${weather.humidity}%`} color="#4fc3f7" />
+            <StatChip label="Wind" value={`${weather.windSpeed} mph`} color="#81c784" />
+            <StatChip label="Feels" value={`${weather.feelsLike}°`} color="#ffb74d" />
           </div>
-        )}
-      </div>
-    </div>
+        </>
+      ) : (
+        <EmptyState
+          icon="⛅"
+          message={noConfig ? 'Not configured' : 'Loading...'}
+          hint={noConfig ? 'Add WEATHER_API_KEY to .env' : undefined}
+        />
+      )}
+    </Card>
   );
 }
 
 // ---------------------------------------------------------------------------
-// News Card (embedded mini widget)
+// News card
 // ---------------------------------------------------------------------------
-
-interface DashboardHeadline {
-  title: string;
-  url: string;
-  source: { name: string };
-  publishedAt: string;
-}
 
 function NewsCard() {
   const [headlines, setHeadlines] = useState<DashboardHeadline[]>([]);
@@ -385,7 +305,7 @@ function NewsCard() {
     if (!api?.getConfig || !api?.newsGetHeadlines) return;
     api.getConfig().then((cfg: Record<string, string>) => {
       if (!cfg.NEWS_API_KEY) { setNoKey(true); return; }
-      api.newsGetHeadlines({ apiKey: cfg.NEWS_API_KEY, pageSize: 5 })
+      api.newsGetHeadlines({ apiKey: cfg.NEWS_API_KEY, pageSize: 6 })
         .then((data: any) => setHeadlines(data.articles ?? []))
         .catch(() => {});
     }).catch(() => {});
@@ -397,127 +317,118 @@ function NewsCard() {
   };
 
   return (
-    <div style={widgetCard}>
-      <div style={widgetHeader}>
-        <span style={{ fontSize: 14 }}>{'\uD83D\uDCF0'}</span>
-        <h3 style={widgetTitleText}>News</h3>
-      </div>
-      <div style={widgetBody}>
-        {headlines.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {headlines.map((article, i) => (
-              <button
-                key={i}
-                onClick={() => openArticle(article.url)}
-                style={{
-                  display: 'block', width: '100%', textAlign: 'left',
-                  padding: '6px 8px', borderRadius: 6,
-                  background: 'none', border: 'none', cursor: 'pointer',
-                }}
-              >
-                <div style={{ fontSize: 12, fontWeight: 500, color: '#ffffff', lineHeight: 1.4, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                  {article.title}
-                </div>
-                <div style={{ fontSize: 10, color: '#6a6a6a' }}>{article.source.name}</div>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div style={emptyState}>
-            <span style={{ fontSize: 32, marginBottom: 8 }}>{'\uD83D\uDCF0'}</span>
-            <div style={{ fontSize: 13, color: '#6a6a6a' }}>
-              {noKey ? 'Add NEWS_API_KEY to .env' : 'Loading headlines...'}
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Discover Card
-// ---------------------------------------------------------------------------
-
-function DiscoverCard({ onNavigate }: { onNavigate: (route: string) => void }) {
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-
-  const items = [
-    { title: 'Browse Spotify', icon: '\uD83C\uDFB5', color: '#1db954', route: '/spotify' },
-    { title: 'YouTube Music', icon: '\u25B6\uFE0F', color: '#ff0000', route: '/youtube' },
-    { title: 'Jellyfin Library', icon: '\uD83C\uDFA5', color: '#aa5cc3', route: '/library' },
-  ];
-
-  return (
-    <div style={widgetCard}>
-      <div style={widgetHeader}>
-        <span style={{ fontSize: 14 }}>{'\uD83D\uDD0D'}</span>
-        <h3 style={widgetTitleText}>Discover</h3>
-      </div>
-      <div style={widgetBody}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {items.map((item, i) => (
+    <Card label="Top Headlines" icon="📰">
+      {headlines.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {headlines.map((a, i) => (
             <button
               key={i}
-              onClick={() => onNavigate(item.route)}
-              onMouseEnter={() => setHoveredIdx(i)}
-              onMouseLeave={() => setHoveredIdx(null)}
-              style={{
-                ...discoverRow,
-                backgroundColor: hoveredIdx === i ? 'rgba(255, 255, 255, 0.09)' : 'transparent',
-              }}
+              onClick={() => openArticle(a.url)}
+              style={newsItem}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'rgba(255,255,255,0.05)'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent'; }}
             >
-              <div style={{ ...discoverIcon, backgroundColor: item.color + '20' }}>
-                <span style={{ fontSize: 16 }}>{item.icon}</span>
+              <div style={{ fontSize: 12, fontWeight: 500, color: '#F0F0F5', lineHeight: 1.4, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                {a.title}
               </div>
-              <span style={{ fontSize: 13, fontWeight: 500, color: '#ffffff' }}>{item.title}</span>
-              <span style={{ fontSize: 12, color: '#6a6a6a', marginLeft: 'auto' }}>{'\u203A'}</span>
+              <div style={{ fontSize: 10, color: 'rgba(240,240,245,0.35)', fontWeight: 600, letterSpacing: '0.3px', textTransform: 'uppercase' }}>
+                {a.source.name}
+              </div>
             </button>
           ))}
         </div>
+      ) : (
+        <EmptyState
+          icon="📰"
+          message={noKey ? 'Not configured' : 'Loading...'}
+          hint={noKey ? 'Add NEWS_API_KEY to .env' : undefined}
+        />
+      )}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Discover card
+// ---------------------------------------------------------------------------
+
+function DiscoverCard({ onNavigate }: { onNavigate: (route: string) => void }) {
+  const items = [
+    { title: 'Spotify', sub: 'Browse playlists & top tracks', icon: '🎵', color: '#1db954', route: '/spotify' },
+    { title: 'YouTube', sub: 'Search and watch videos', icon: '▶️', color: '#FF4444', route: '/youtube' },
+    { title: 'Jellyfin', sub: 'Your local media library', icon: '🎥', color: '#aa5cc3', route: '/jellyfin' },
+  ];
+  const [hov, setHov] = useState<number | null>(null);
+
+  return (
+    <Card label="Go To" icon="🔗">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {items.map((item, i) => (
+          <button
+            key={i}
+            onClick={() => onNavigate(item.route)}
+            onMouseEnter={() => setHov(i)}
+            onMouseLeave={() => setHov(null)}
+            style={{
+              ...discoverBtn,
+              backgroundColor: hov === i ? 'rgba(255,255,255,0.07)' : 'transparent',
+            }}
+          >
+            <div style={{ ...discoverIcon, backgroundColor: item.color + '22' }}>
+              <span style={{ fontSize: 16 }}>{item.icon}</span>
+            </div>
+            <div style={{ textAlign: 'left', minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#F0F0F5' }}>{item.title}</div>
+              <div style={{ fontSize: 11, color: 'rgba(240,240,245,0.4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.sub}</div>
+            </div>
+            <span style={{ fontSize: 14, color: 'rgba(240,240,245,0.2)', marginLeft: 'auto', flexShrink: 0 }}>›</span>
+          </button>
+        ))}
       </div>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared: Card container
+// ---------------------------------------------------------------------------
+
+function Card({ label, icon, children }: { label: string; icon: string; children: React.ReactNode }) {
+  return (
+    <div style={cardWrap}>
+      <div style={cardHeader}>
+        <span style={{ fontSize: 13 }}>{icon}</span>
+        <span style={cardLabel}>{label}</span>
+      </div>
+      <div style={cardBody}>{children}</div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Section Link
+// Shared: Stat chip
 // ---------------------------------------------------------------------------
 
-function SectionLink({
-  title,
-  icon,
-  description,
-  color,
-  onClick,
-}: {
-  title: string;
-  icon: string;
-  description: string;
-  color: string;
-  onClick: () => void;
-}) {
-  const [hovered, setHovered] = useState(false);
-
+function StatChip({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        ...sectionLinkBtn,
-        backgroundColor: hovered ? 'rgba(255, 255, 255, 0.14)' : 'rgba(5, 5, 5, 0.25)',
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        borderColor: hovered ? color + '80' : 'rgba(255, 255, 255, 0.12)',
-      }}
-    >
-      <span style={{ fontSize: 20 }}>{icon}</span>
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>{title}</div>
-        <div style={{ fontSize: 11, color: '#6a6a6a' }}>{description}</div>
-      </div>
-    </button>
+    <div style={{ ...statChipBase, borderColor: color + '40' }}>
+      <span style={{ fontSize: 16, fontWeight: 700, color }}>{value}</span>
+      <span style={{ fontSize: 10, color: 'rgba(240,240,245,0.4)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>{label}</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared: Empty state
+// ---------------------------------------------------------------------------
+
+function EmptyState({ icon, message, hint }: { icon: string; message: string; hint?: string }) {
+  return (
+    <div style={emptyWrap}>
+      <span style={{ fontSize: 28, marginBottom: 8, opacity: 0.5 }}>{icon}</span>
+      <span style={{ fontSize: 13, color: 'rgba(240,240,245,0.4)', fontWeight: 500 }}>{message}</span>
+      {hint && <span style={{ fontSize: 11, color: 'rgba(240,240,245,0.25)', marginTop: 4 }}>{hint}</span>}
+    </div>
   );
 }
 
@@ -525,243 +436,286 @@ function SectionLink({
 // Styles
 // ---------------------------------------------------------------------------
 
-const pageWrapper: CSSProperties = {
-  position: 'relative',
-  minHeight: '100%',
-};
-
-
-const attributionBadge: CSSProperties = {
-  position: 'fixed',
-  bottom: 16,
-  right: 16,
-  fontSize: 10,
-  color: 'rgba(255, 255, 255, 0.40)',
-  zIndex: 10,
-  pointerEvents: 'none',
-};
-
-const attrLink: CSSProperties = {
-  color: 'rgba(255, 255, 255, 0.55)',
-  textDecoration: 'none',
-  pointerEvents: 'auto',
-};
-
-const container: CSSProperties = {
-  padding: '24px 32px 120px',
-  maxWidth: 1200,
+const page: CSSProperties = {
+  padding: '24px 28px 100px',
+  maxWidth: 1280,
   margin: '0 auto',
-  position: 'relative',
-  zIndex: 1,
+  height: '100%',
+  overflowY: 'auto',
+  boxSizing: 'border-box',
 };
 
-const headerSection: CSSProperties = {
+const header: CSSProperties = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  justifyContent: 'space-between',
   marginBottom: 24,
 };
 
-const greetingStyle: CSSProperties = {
-  fontSize: 32,
+const headerRight: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 12,
+  flexShrink: 0,
+};
+
+const greetingH1: CSSProperties = {
+  fontSize: 28,
   fontWeight: 800,
-  color: '#ffffff',
+  color: '#F0F0F5',
   margin: 0,
   letterSpacing: '-0.5px',
-  textShadow: '0 2px 12px rgba(0,0,0,0.85)',
 };
 
 const greetingSubtext: CSSProperties = {
-  fontSize: 14,
-  color: 'rgba(255,255,255,0.55)',
-  marginTop: 4,
-  textShadow: '0 1px 6px rgba(0,0,0,0.80)',
+  fontSize: 12,
+  color: 'rgba(240,240,245,0.35)',
+  marginTop: 3,
+  fontWeight: 500,
+  textTransform: 'uppercase',
+  letterSpacing: '0.6px',
 };
 
-const quickAccessSection: CSSProperties = {
+const greetingSub = greetingSubtext;
+
+const clockWrap: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'flex-end',
+};
+
+const clockTime: CSSProperties = {
+  fontSize: 22,
+  fontWeight: 700,
+  color: '#F0F0F5',
+  letterSpacing: '-0.5px',
+  fontVariantNumeric: 'tabular-nums',
+};
+
+const clockDate: CSSProperties = {
+  fontSize: 11,
+  color: 'rgba(240,240,245,0.35)',
+  fontWeight: 500,
+  marginTop: 2,
+};
+
+// Quick row
+const quickRow: CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-  gap: 12,
+  gridTemplateColumns: 'repeat(6, 1fr)',
+  gap: 10,
   marginBottom: 24,
 };
 
-const quickCard: CSSProperties = {
+const quickBtn: CSSProperties = {
   display: 'flex',
+  flexDirection: 'column',
   alignItems: 'center',
-  gap: 12,
-  padding: '12px 16px',
-  borderRadius: 8,
-  border: '1px solid rgba(255, 255, 255, 0.08)',
+  gap: 6,
+  padding: '14px 8px',
+  borderRadius: 10,
+  border: '1px solid rgba(255,255,255,0.08)',
+  backgroundColor: 'rgba(255,255,255,0.04)',
   cursor: 'pointer',
-  transition: 'all 200ms ease',
+  transition: 'all 150ms ease',
   background: 'none',
-  textAlign: 'left',
 };
 
-const quickCardIcon: CSSProperties = {
-  width: 40,
-  height: 40,
-  borderRadius: 8,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  flexShrink: 0,
-};
-
-const dashboardGrid: CSSProperties = {
+// Main grid
+const mainGrid: CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(2, 1fr)',
+  gridTemplateColumns: '1fr 1fr',
   gap: 16,
-  marginBottom: 24,
 };
 
-const widgetCard: CSSProperties = {
-  backgroundColor: 'rgba(5, 5, 5, 0.25)',
-  backdropFilter: 'blur(24px)',
-  WebkitBackdropFilter: 'blur(24px)',
-  borderRadius: 12,
-  border: '1px solid rgba(255, 255, 255, 0.12)',
+const leftCol: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 16,
+};
+
+const rightCol: CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 16,
+};
+
+// Card
+const cardWrap: CSSProperties = {
+  backgroundColor: 'rgba(255,255,255,0.04)',
+  border: '1px solid rgba(255,255,255,0.08)',
+  borderRadius: 14,
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column',
-  minHeight: 240,
 };
 
-const widgetHeader: CSSProperties = {
+const cardHeader: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
   padding: '12px 16px',
-  borderBottom: '1px solid rgba(255, 255, 255, 0.10)',
+  borderBottom: '1px solid rgba(255,255,255,0.07)',
   flexShrink: 0,
 };
 
-const widgetTitleText: CSSProperties = {
-  fontSize: 14,
-  fontWeight: 600,
-  color: '#ffffff',
-  margin: 0,
+const cardLabel: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: 'rgba(240,240,245,0.45)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.7px',
 };
 
-const widgetBody: CSSProperties = {
+const cardBody: CSSProperties = {
   flex: 1,
-  padding: 16,
-  overflow: 'auto',
+  padding: '14px 16px',
+  overflow: 'hidden',
 };
 
-const emptyState: CSSProperties = {
+// Now playing
+const nowPlayingHero: CSSProperties = {
   display: 'flex',
-  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 14,
+};
+
+const heroArtwork: CSSProperties = {
+  width: 56,
+  height: 56,
+  borderRadius: 8,
+  overflow: 'hidden',
+  backgroundColor: 'rgba(255,255,255,0.07)',
+  flexShrink: 0,
+  display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  height: '100%',
-  minHeight: 120,
-  textAlign: 'center',
 };
 
-const trackRow: CSSProperties = {
+const miniProgressTrack: CSSProperties = {
+  height: 2,
+  backgroundColor: 'rgba(255,255,255,0.1)',
+  borderRadius: 1,
+  marginTop: 10,
+  overflow: 'hidden',
+};
+
+const miniProgressFill: CSSProperties = {
+  height: '100%',
+  backgroundColor: '#7B7CF8',
+  borderRadius: 1,
+  transition: 'width 1s linear',
+};
+
+const playingDot: CSSProperties = {
+  width: 8,
+  height: 8,
+  borderRadius: '50%',
+  backgroundColor: '#7B7CF8',
+  flexShrink: 0,
+  boxShadow: '0 0 8px #7B7CF8aa',
+  animation: 'pulse 2s ease infinite',
+};
+
+const recentRow: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 10,
-  padding: '6px 8px',
+  padding: '6px 4px',
   borderRadius: 6,
-  transition: 'background-color 100ms ease',
+  transition: 'background 100ms',
 };
 
-const trackArtwork: CSSProperties = {
-  width: 40,
-  height: 40,
-  borderRadius: 4,
+const recentArt: CSSProperties = {
+  width: 36,
+  height: 36,
+  borderRadius: 5,
   overflow: 'hidden',
-  backgroundColor: 'rgba(255, 255, 255, 0.10)',
+  backgroundColor: 'rgba(255,255,255,0.07)',
   flexShrink: 0,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
 };
 
-const trackTitle: CSSProperties = {
-  fontSize: 13,
-  fontWeight: 500,
-  color: '#ffffff',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-};
-
-const trackArtist: CSSProperties = {
-  fontSize: 11,
-  color: '#6a6a6a',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-};
-
-const trackSource: CSSProperties = {
-  fontSize: 10,
-  color: '#4a4a4a',
-  textTransform: 'uppercase',
-  flexShrink: 0,
-};
-
-const weatherPreview: CSSProperties = {
+// Weather
+const weatherHero: CSSProperties = {
   display: 'flex',
-  flexDirection: 'column',
+  alignItems: 'center',
+  gap: 12,
+  marginBottom: 16,
 };
 
-const weatherDetails: CSSProperties = {
+const weatherTempBig: CSSProperties = {
+  fontSize: 40,
+  fontWeight: 800,
+  color: '#F0F0F5',
+  lineHeight: 1,
+  letterSpacing: '-1px',
+};
+
+const weatherStatRow: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(3, 1fr)',
   gap: 8,
-  marginTop: 16,
 };
 
-const weatherDetailItem: CSSProperties = {
+const statChipBase: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: 2,
-  fontSize: 12,
-  padding: '8px',
-  backgroundColor: 'rgba(255, 255, 255, 0.10)',
-  borderRadius: 6,
+  alignItems: 'center',
+  gap: 3,
+  padding: '10px 8px',
+  borderRadius: 8,
+  backgroundColor: 'rgba(255,255,255,0.04)',
+  border: '1px solid rgba(255,255,255,0.08)',
 };
 
-const discoverRow: CSSProperties = {
+// News
+const newsItem: CSSProperties = {
+  display: 'block',
+  width: '100%',
+  textAlign: 'left',
+  padding: '8px 6px',
+  borderRadius: 7,
+  background: 'transparent',
+  border: 'none',
+  cursor: 'pointer',
+  borderBottom: '1px solid rgba(255,255,255,0.05)',
+  transition: 'background 100ms',
+};
+
+// Discover
+const discoverBtn: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: 10,
-  padding: '8px 10px',
-  borderRadius: 6,
+  gap: 12,
+  padding: '9px 8px',
+  borderRadius: 8,
   border: 'none',
   background: 'none',
   cursor: 'pointer',
-  transition: 'background-color 100ms ease',
+  transition: 'background 100ms',
   width: '100%',
-  textAlign: 'left',
 };
 
 const discoverIcon: CSSProperties = {
-  width: 32,
-  height: 32,
-  borderRadius: 6,
+  width: 34,
+  height: 34,
+  borderRadius: 8,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   flexShrink: 0,
 };
 
-const sectionLinksRow: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(3, 1fr)',
-  gap: 12,
-};
-
-const sectionLinkBtn: CSSProperties = {
+// Empty
+const emptyWrap: CSSProperties = {
   display: 'flex',
+  flexDirection: 'column',
   alignItems: 'center',
-  gap: 12,
-  padding: '16px',
-  borderRadius: 8,
-  border: '1px solid rgba(255, 255, 255, 0.08)',
-  cursor: 'pointer',
-  transition: 'all 200ms ease',
-  background: 'none',
-  textAlign: 'left',
+  justifyContent: 'center',
+  minHeight: 100,
+  textAlign: 'center',
+  padding: '12px 0',
 };
